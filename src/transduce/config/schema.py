@@ -1,9 +1,9 @@
-"""Pydantic schema for the v0 service configuration.
+"""Pydantic schema for the v0.5 service configuration.
 
-Mirrors the v0 subset of docs/system-design.md §Configuration. The v0.5
-release extends ``modes`` (allowlist + sha256, P2-PLG-01..P2-PLG-06) and
-v1 extends ``observability`` (OTel GenAI SemConv, P3-OBS-01..P3-OBS-05)
-plus ``language.detector`` (fasttext, P3-LANG-01).
+Mirrors the v0.5 subset of docs/system-design.md §Configuration. The
+release adds the ``modes`` allowlist + sha256 section
+(P2-PLG-01..P2-PLG-03); v1 extends ``observability`` (OTel GenAI SemConv,
+P3-OBS-01..P3-OBS-05) plus ``language.detector`` (fasttext, P3-LANG-01).
 
 Each section sets ``extra="forbid"`` so typos surface as validation
 errors at startup rather than silently degrading behaviour.
@@ -80,12 +80,40 @@ class LanguageConfig(BaseModel):
     default: str = Field(default="en", min_length=1)
 
 
+class ModePackageEntry(BaseModel):
+    """One pinned mode package in the allowlist (P2-PLG-01)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    sha256: str = Field(min_length=64, max_length=64)
+    path: str = Field(min_length=1, description="Filesystem path to the package root.")
+    signed_by: str | None = Field(default=None, min_length=1)
+
+
+class ModesConfig(BaseModel):
+    """Mode-loader configuration (P2-PLG-01..P2-PLG-03).
+
+    ``source`` defaults to ``allowlist``. Setting it to ``auto`` enables
+    legacy entry-point discovery and emits a startup warning per the
+    dev plan; production deployments must keep it on ``allowlist``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["allowlist", "auto"] = "allowlist"
+    enforce_signing: bool = False
+    packages: list[ModePackageEntry] = Field(default_factory=list)
+
+
 class Config(BaseModel):
-    """Full v0 service configuration."""
+    """Full v0.5 service configuration."""
 
     model_config = ConfigDict(extra="forbid")
 
     service: ServiceConfig = Field(default_factory=ServiceConfig)
+    modes: ModesConfig = Field(default_factory=ModesConfig)
     backends: BackendsConfig
     verification: VerificationConfig = Field(default_factory=VerificationConfig)
     language: LanguageConfig = Field(default_factory=LanguageConfig)

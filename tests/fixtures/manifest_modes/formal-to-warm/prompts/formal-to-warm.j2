@@ -1,0 +1,7 @@
+Rewrite the following text in a warmer register while preserving every entity, number, URL, and date. Return only the rewritten text.
+
+Intensity: {{ intensity }} (0.0 = subtle, 1.0 = strongly warm).
+{% if preserve %}Preserve: {{ preserve | join(', ') }}.
+{% endif %}
+Text:
+{{ input }}
