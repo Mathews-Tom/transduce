@@ -51,6 +51,10 @@ class StubBackend:
     async def health(self) -> BackendHealth:
         return BackendHealth(healthy=self.healthy, detail=None if self.healthy else "down")
 
+    def cost_estimate(self, *, tokens_in: int, tokens_out: int) -> float | None:
+        del tokens_in, tokens_out
+        return None
+
 
 @dataclass
 class StubScorer:
@@ -392,3 +396,62 @@ def test_metrics_includes_injection_detected_counter_after_match() -> None:
     assert response.status_code == 200
     assert "transduce_injection_detected_total" in response.text
     assert 'category="ignore_previous_instructions"' in response.text
+
+
+def _multilingual_app(
+    *,
+    backend: StubBackend | None = None,
+) -> Litestar:
+    from transduce.language.detector import LanguageDetector
+    from transduce.verification.base import Scorer
+
+    backend = backend or StubBackend(queue=[GenerationResult(text="ok", tokens_in=2, tokens_out=2)])
+    scorers: list[Scorer] = [StubScorer(name="cosine_similarity")]
+    detector = LanguageDetector(languages=("en", "de", "fr"), default="en", min_confidence=0.5)
+    return create_app(
+        _config(),
+        backend=backend,
+        scorers=scorers,
+        language_detector=detector,
+    )
+
+
+def test_post_transform_german_input_on_english_only_mode_returns_415() -> None:
+    with _client(_multilingual_app()) as client:
+        response = client.post(
+            "/v1/transform",
+            json={
+                "text": (
+                    "Dies ist ein deutscher Satz mit ausreichend Wörtern zur "
+                    "eindeutigen Erkennung der Sprache."
+                ),
+                "mode": "dejargon",
+            },
+        )
+
+    assert response.status_code == 415
+    body = response.json()
+    assert body["error"] == "language_not_supported"
+    assert body["details"]["detected"] == "de"
+    assert body["details"]["mode_id"] == "dejargon"
+    assert body["details"]["supported"] == ["en"]
+
+
+def test_metrics_includes_language_unsupported_counter_after_rejection() -> None:
+    with _client(_multilingual_app()) as client:
+        client.post(
+            "/v1/transform",
+            json={
+                "text": (
+                    "Dies ist ein deutscher Satz mit ausreichend Wörtern zur "
+                    "eindeutigen Erkennung der Sprache."
+                ),
+                "mode": "dejargon",
+            },
+        )
+        response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "transduce_language_unsupported_total" in response.text
+    assert 'mode="dejargon"' in response.text
+    assert 'lang="de"' in response.text

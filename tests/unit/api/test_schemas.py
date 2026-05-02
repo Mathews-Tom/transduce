@@ -179,11 +179,17 @@ def test_transform_error_with_validation_error_code_matches_enum() -> None:
 def test_error_code_enum_matches_documented_codes() -> None:
     documented = {
         "mode_not_found",
+        "mode_version_not_found",
         "mode_hash_mismatch",
         "backend_unavailable",
+        "backend_min_model_not_met",
         "verification_failed",
+        "composite_verification_failed",
         "input_too_long",
         "input_injection_detected",
+        "language_not_supported",
+        "budget_exceeded",
+        "concurrency_limit_exceeded",
         "generation_failed",
         "not_implemented",
         "timeout",

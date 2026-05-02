@@ -60,6 +60,12 @@ class ScriptedBackend:
     async def health(self) -> BackendHealth:  # pragma: no cover — orchestrator never calls
         return BackendHealth(healthy=True)
 
+    def cost_estimate(
+        self, *, tokens_in: int, tokens_out: int
+    ) -> float | None:  # pragma: no cover — orchestrator never calls
+        del tokens_in, tokens_out
+        return None
+
 
 @dataclass
 class ScriptedScorer:

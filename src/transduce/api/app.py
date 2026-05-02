@@ -28,6 +28,7 @@ from transduce.backends.base import Backend
 from transduce.backends.ollama import OllamaBackend
 from transduce.config.schema import Config
 from transduce.injection.scanner import InjectionScanner
+from transduce.language.detector import LanguageDetector
 from transduce.pipeline.orchestrator import Orchestrator
 from transduce.registry.static import StaticRegistry, build_default_registry
 from transduce.verification.base import Scorer
@@ -52,12 +53,14 @@ def create_app(
     scorers: list[Scorer] | None = None,
     metrics_state: TransduceMetrics | None = None,
     injection_scanner: InjectionScanner | None = None,
+    language_detector: LanguageDetector | None = None,
 ) -> Litestar:
     """Build a Litestar app wired against ``config`` and optional overrides.
 
-    Tests inject ``backend``, ``registry``, and ``scorers`` to avoid hitting
-    fastembed and spaCy; production wiring synthesises the real
-    implementations from config (commit follow-ups: see CLI ``serve``).
+    Tests inject ``backend``, ``registry``, ``scorers``, and
+    ``language_detector`` to avoid hitting fastembed, spaCy, and lingua;
+    production wiring synthesises the real implementations from config
+    (commit follow-ups: see CLI ``serve``).
     """
     if scorers is None:
         raise ValueError("scorers must be supplied; production wiring builds them from config")
@@ -71,6 +74,11 @@ def create_app(
         verifier=verifier,
         default_max_retries=config.verification.max_retries,
     )
+    resolved_detector = language_detector or LanguageDetector(
+        languages=config.language.languages,
+        default=config.language.default,
+        min_confidence=config.language.min_confidence,
+    )
 
     app_state = TransduceState(
         config=config,
@@ -80,6 +88,7 @@ def create_app(
         orchestrator=orchestrator,
         metrics=metrics_state or TransduceMetrics.build(),
         injection_scanner=injection_scanner or InjectionScanner(),
+        language_detector=resolved_detector,
     )
 
     async def shutdown(app_instance: Litestar) -> None:

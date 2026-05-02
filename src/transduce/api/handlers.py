@@ -16,7 +16,9 @@ from transduce.api.schemas import (
     TransformResponse,
 )
 from transduce.api.state import TransduceState
+from transduce.backends.concurrency import ConcurrencyLimitExceededError
 from transduce.injection.scanner import InputInjectionDetectedError
+from transduce.language.detector import LanguageNotSupportedError
 from transduce.registry.spec import ModeSpec, PreserveRule
 
 
@@ -57,6 +59,20 @@ async def post_transform(
         state.metrics.injection_detected_total.labels(category=injection_match.category).inc()
         raise InputInjectionDetectedError(injection_match)
 
+    detected_language = state.language_detector.detect(data.text)
+    if isinstance(data.mode, str):
+        mode_id_for_lang_check = data.mode
+        mode_spec = state.registry.resolve(mode_id_for_lang_check)
+        if detected_language not in mode_spec.supported_languages:
+            state.metrics.language_unsupported_total.labels(
+                mode=mode_id_for_lang_check, lang=detected_language
+            ).inc()
+            raise LanguageNotSupportedError(
+                detected=detected_language,
+                supported=mode_spec.supported_languages,
+                mode_id=mode_id_for_lang_check,
+            )
+
     try:
         result = await state.orchestrator.transform(
             text=data.text,
@@ -65,8 +81,12 @@ async def post_transform(
             preserve=_coerce_preserve(data.preserve),
             max_retries=max_retries,
             request_id=request_id,
-            language=state.config.language.default,
+            language=detected_language,
         )
+    except ConcurrencyLimitExceededError as exc:
+        state.metrics.concurrency_rejections_total.labels(backend=exc.backend_id).inc()
+        state.metrics.requests_total.labels(mode=_mode_label(data.mode), verdict="error").inc()
+        raise
     except Exception:
         state.metrics.requests_total.labels(mode=_mode_label(data.mode), verdict="error").inc()
         raise

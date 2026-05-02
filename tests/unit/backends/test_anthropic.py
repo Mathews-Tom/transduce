@@ -48,9 +48,7 @@ class _StubMessage:
 @dataclass
 class _StubMessages:
     create: Callable[..., Awaitable[Any]]
-    count_tokens: Callable[..., Awaitable[Any]] = field(
-        default=lambda **_: _async_return(object())
-    )
+    count_tokens: Callable[..., Awaitable[Any]] = field(default=lambda **_: _async_return(object()))
 
 
 @dataclass

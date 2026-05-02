@@ -21,7 +21,9 @@ from transduce.backends.base import (
     GenerationFailedError,
     GenerationTimeoutError,
 )
+from transduce.backends.concurrency import ConcurrencyLimitExceededError
 from transduce.injection.scanner import InputInjectionDetectedError
+from transduce.language.detector import LanguageNotSupportedError
 from transduce.pipeline.orchestrator import (
     CompositionNotImplementedError,
     VerificationFailedError,
@@ -110,6 +112,37 @@ def domain_exception_handler(
         return Response(
             envelope.model_dump(mode="json"),
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
+    if isinstance(exc, LanguageNotSupportedError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.LANGUAGE_NOT_SUPPORTED,
+            message=str(exc),
+            details={
+                "detected": exc.detected,
+                "supported": list(exc.supported),
+                "mode_id": exc.mode_id,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+        )
+    if isinstance(exc, ConcurrencyLimitExceededError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.CONCURRENCY_LIMIT_EXCEEDED,
+            message=str(exc),
+            details={
+                "backend_id": exc.backend_id,
+                "limit": exc.limit,
+                "retry_after_s": exc.retry_after_s,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.TOO_MANY_REQUESTS,
+            headers={"Retry-After": f"{exc.retry_after_s:g}"},
         )
     for exception_type, (code, status) in _EXCEPTION_MAPPING.items():
         if isinstance(exc, exception_type):

@@ -20,17 +20,27 @@ from transduce.verification.negation import NegationDiffResult
 class ErrorCode(StrEnum):
     """Stable error codes returned in the ``TransformError`` envelope.
 
-    Includes v0.5 additions: ``input_injection_detected`` (P2-INJ-03) and
-    ``mode_hash_mismatch`` (P2-PLG-02). v1 adds ``language_not_supported``,
-    ``budget_exceeded``, ``concurrency_limit_exceeded``.
+    v0.5 additions: ``input_injection_detected`` (P2-INJ-03) and
+    ``mode_hash_mismatch`` (P2-PLG-02). v1 adds
+    ``language_not_supported`` (P3-LANG-03), ``budget_exceeded``
+    (P3-BUDG-04), ``concurrency_limit_exceeded`` (P3-BACK-06),
+    ``backend_min_model_not_met`` (P3-BACK-09),
+    ``mode_version_not_found`` (P3-VER-03), and
+    ``composite_verification_failed`` (P3-COMP-06).
     """
 
     MODE_NOT_FOUND = "mode_not_found"
+    MODE_VERSION_NOT_FOUND = "mode_version_not_found"
     MODE_HASH_MISMATCH = "mode_hash_mismatch"
     BACKEND_UNAVAILABLE = "backend_unavailable"
+    BACKEND_MIN_MODEL_NOT_MET = "backend_min_model_not_met"
     VERIFICATION_FAILED = "verification_failed"
+    COMPOSITE_VERIFICATION_FAILED = "composite_verification_failed"
     INPUT_TOO_LONG = "input_too_long"
     INPUT_INJECTION_DETECTED = "input_injection_detected"
+    LANGUAGE_NOT_SUPPORTED = "language_not_supported"
+    BUDGET_EXCEEDED = "budget_exceeded"
+    CONCURRENCY_LIMIT_EXCEEDED = "concurrency_limit_exceeded"
     GENERATION_FAILED = "generation_failed"
     NOT_IMPLEMENTED = "not_implemented"
     TIMEOUT = "timeout"
