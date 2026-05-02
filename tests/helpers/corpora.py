@@ -36,6 +36,6 @@ def load_corpus(name: str, *, fixtures_dir: Path | None = None) -> list[dict[str
         if not isinstance(item, dict):
             raise ValueError(f"{path}[{index}] must be an object, got {type(item).__name__}")
         for required in REQUIRED_FIELDS:
-            if required not in item or not isinstance(item[required], str):
+            if not isinstance(item.get(required), str):
                 raise ValueError(f"{path}[{index}] missing required string field {required!r}")
     return data

@@ -32,14 +32,14 @@ def _assert_corpus_shape(corpus: list[dict[str, Any]], name: str) -> None:
     for index, pair in enumerate(corpus):
         original = pair["original"]
         transformed = pair["transformed"]
+        label = pair.get("label")
         category = pair.get("category")
         assert isinstance(original, str), f"{name}[{index}].original must be a string"
         assert original, f"{name}[{index}].original must be non-empty"
         assert isinstance(transformed, str), f"{name}[{index}].transformed must be a string"
         assert transformed, f"{name}[{index}].transformed must be non-empty"
-        assert pair.get("label") in VALID_LABELS, (
-            f"{name}[{index}].label must be one of {sorted(VALID_LABELS)}, "
-            f"got {pair.get('label')!r}"
+        assert label in VALID_LABELS, (
+            f"{name}[{index}].label must be one of {sorted(VALID_LABELS)}, got {label!r}"
         )
         assert isinstance(category, str), f"{name}[{index}].category must be a string"
         assert category, f"{name}[{index}].category must be non-empty"
