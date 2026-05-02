@@ -21,11 +21,7 @@ import logging
 from collections.abc import Iterable
 from pathlib import Path
 
-from transduce.registry.manifest import (
-    ManifestError,
-    load_manifest,
-    load_manifests_from_directory,
-)
+from transduce.registry.manifest import load_manifest, load_manifests_from_directory
 from transduce.registry.spec import ModeSpec
 
 _LOG = logging.getLogger(__name__)
@@ -137,10 +133,7 @@ def load_allowlisted_modes(
         if (package_root / "mode.toml").exists():
             specs.append(load_manifest(package_root))
             continue
-        try:
-            specs.extend(load_manifests_from_directory(package_root))
-        except ManifestError:
-            raise
+        specs.extend(load_manifests_from_directory(package_root))
     return specs
 
 

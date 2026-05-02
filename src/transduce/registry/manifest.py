@@ -30,7 +30,6 @@ fast, before any inference.
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Iterable
 from pathlib import Path
 
 from jinja2 import Environment, StrictUndefined, TemplateError
@@ -174,14 +173,8 @@ def load_manifests_from_directory(root: Path) -> list[ModeSpec]:
     return specs
 
 
-def specs_iter(directories: Iterable[Path]) -> list[ModeSpec]:
-    """Load manifests from each directory in ``directories``, preserving order."""
-    return [load_manifest(directory) for directory in directories]
-
-
 __all__ = [
     "ManifestError",
     "load_manifest",
     "load_manifests_from_directory",
-    "specs_iter",
 ]
