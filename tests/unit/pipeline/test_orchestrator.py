@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from transduce.backends.base import BackendCapabilities, BackendHealth, GenerationResult
+from transduce.config.schema import BudgetConfig
 from transduce.pipeline.orchestrator import (
     CompositionNotImplementedError,
     Orchestrator,
@@ -60,6 +61,12 @@ class ScriptedBackend:
     async def health(self) -> BackendHealth:  # pragma: no cover — orchestrator never calls
         return BackendHealth(healthy=True)
 
+    def cost_estimate(
+        self, *, tokens_in: int, tokens_out: int
+    ) -> float | None:  # pragma: no cover — orchestrator never calls
+        del tokens_in, tokens_out
+        return None
+
 
 @dataclass
 class ScriptedScorer:
@@ -104,11 +111,13 @@ def _orchestrator(
     backend: ScriptedBackend,
     scorers: list[ScriptedScorer],
     default_max_retries: int = 3,
+    budget_config: BudgetConfig | None = None,
 ) -> Orchestrator:
     return Orchestrator(
         registry=StaticRegistry([_spec()]),
         backend=backend,
         verifier=VerifierPipeline(scorers),
+        budget_config=budget_config or BudgetConfig(),
         default_max_retries=default_max_retries,
     )
 
@@ -226,7 +235,14 @@ async def test_orchestrator_max_retries_exhausted_raises_verification_failed() -
             span="bad",
         )
     ]
-    orchestrator = _orchestrator(backend=backend, scorers=scorers, default_max_retries=2)
+    # Disable trend abort so retry exhaustion lands the verification_failed
+    # path even when the scripted scorer returns identical scores.
+    orchestrator = _orchestrator(
+        backend=backend,
+        scorers=scorers,
+        default_max_retries=2,
+        budget_config=BudgetConfig(abort_on_non_improving_trend=False),
+    )
 
     with pytest.raises(VerificationFailedError) as exc:
         await orchestrator.transform(
@@ -340,6 +356,7 @@ async def test_orchestrator_invalid_default_max_retries_rejected_at_construction
             registry=StaticRegistry([_spec()]),
             backend=backend,
             verifier=VerifierPipeline(scorers),
+            budget_config=BudgetConfig(),
             default_max_retries=10,
         )
 
@@ -353,6 +370,7 @@ async def test_orchestrator_invalid_max_tokens_floor_rejected_at_construction() 
             registry=StaticRegistry([_spec()]),
             backend=backend,
             verifier=VerifierPipeline(scorers),
+            budget_config=BudgetConfig(),
             max_tokens_floor=0,
         )
 
@@ -366,6 +384,7 @@ async def test_orchestrator_invalid_max_tokens_ratio_rejected_at_construction() 
             registry=StaticRegistry([_spec()]),
             backend=backend,
             verifier=VerifierPipeline(scorers),
+            budget_config=BudgetConfig(),
             max_tokens_ratio=0.0,
         )
 

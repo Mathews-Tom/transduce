@@ -1,4 +1,4 @@
-"""Command-line entry point for transduce (P1-CFG-02)."""
+"""Command-line entry point for transduce (P1-CFG-02, P3-BACK-01..09)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import click
 import uvicorn
 
 from transduce.api.app import create_app
+from transduce.backends.factory import build_backend
 from transduce.config.loader import ConfigError, load_config
+from transduce.config.schema import BackendEntry, Config
 from transduce.verification.cosine import CosineSimilarityScorer, build_fastembed_embedder
 from transduce.verification.preservation import (
     EntityPreservationScorer,
@@ -70,11 +72,22 @@ def serve(
         NumberPreservationScorer(),
         UrlPreservationScorer(),
     ]
-    app = create_app(config, scorers=scorers)
+    backend = build_backend(_default_entry(config))
+    app = create_app(config, backend=backend, scorers=scorers)
     uvicorn.run(
         app,
         host=host or config.service.host,
         port=port or config.service.port,
+    )
+
+
+def _default_entry(config: Config) -> BackendEntry:
+    """Return the BackendEntry referenced by ``config.backends.default``."""
+    for entry in config.backends.registry:
+        if entry.id == config.backends.default:
+            return entry
+    raise click.ClickException(  # pragma: no cover — schema validator enforces this
+        f"backends.default {config.backends.default!r} missing from registry"
     )
 
 

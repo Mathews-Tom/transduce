@@ -15,6 +15,7 @@ from transduce.backends.base import BackendCapabilities, BackendHealth, Generati
 from transduce.config.schema import (
     BackendEntry,
     BackendsConfig,
+    BudgetConfig,
     Config,
     LanguageConfig,
     ServiceConfig,
@@ -51,6 +52,10 @@ class StubBackend:
     async def health(self) -> BackendHealth:
         return BackendHealth(healthy=self.healthy, detail=None if self.healthy else "down")
 
+    def cost_estimate(self, *, tokens_in: int, tokens_out: int) -> float | None:
+        del tokens_in, tokens_out
+        return None
+
 
 @dataclass
 class StubScorer:
@@ -68,7 +73,12 @@ class StubScorer:
         )
 
 
-def _config(default_cosine_min: float = 0.85) -> Config:
+def _config(
+    default_cosine_min: float = 0.85,
+    *,
+    budget: BudgetConfig | None = None,
+    model_size_b: float | None = 14.0,
+) -> Config:
     return Config(
         service=ServiceConfig(),
         backends=BackendsConfig(
@@ -79,10 +89,12 @@ def _config(default_cosine_min: float = 0.85) -> Config:
                     provider="ollama",
                     endpoint="http://ollama.local:11434",
                     model="qwen2.5:1.5b",
+                    model_size_b=model_size_b,
                 )
             ],
         ),
         verification=VerificationConfig(default_cosine_min=default_cosine_min),
+        budget=budget or BudgetConfig(),
         language=LanguageConfig(),
     )
 
@@ -91,13 +103,19 @@ def _app(
     *,
     backend: StubBackend | None = None,
     scorer_queues: Sequence[Sequence[str]] | None = None,
+    budget: BudgetConfig | None = None,
+    model_size_b: float | None = 14.0,
 ) -> Litestar:
     from transduce.verification.base import Scorer
 
     backend = backend or StubBackend(queue=[GenerationResult(text="ok", tokens_in=2, tokens_out=2)])
     queues = scorer_queues or [["accept"]]
     scorers: list[Scorer] = [StubScorer(name="cosine_similarity", queue=list(queues[0]))]
-    return create_app(_config(), backend=backend, scorers=scorers)
+    return create_app(
+        _config(budget=budget, model_size_b=model_size_b),
+        backend=backend,
+        scorers=scorers,
+    )
 
 
 def _client(app: Litestar) -> TestClient[Litestar]:
@@ -146,15 +164,101 @@ def test_post_transform_unknown_mode_returns_404_mode_not_found() -> None:
     assert response.json()["error"] == "mode_not_found"
 
 
-def test_post_transform_compose_chain_returns_400_not_implemented() -> None:
+def test_post_transform_unknown_version_returns_404_mode_version_not_found() -> None:
     with _client(_app()) as client:
+        response = client.post("/v1/transform", json={"text": "hi", "mode": "dejargon@9.9.9"})
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "mode_version_not_found"
+
+
+def test_post_transform_min_model_b_violation_returns_412() -> None:
+    # ``dejargon`` requires min_model_b=14.0; declaring 1.5B forces the
+    # precondition to fail before any generation runs.
+    with _client(_app(model_size_b=1.5)) as client:
+        response = client.post("/v1/transform", json={"text": "hi", "mode": "dejargon"})
+
+    assert response.status_code == 412
+    body = response.json()
+    assert body["error"] == "backend_min_model_not_met"
+    assert body["details"]["mode_id"] == "dejargon"
+    assert body["details"]["required_b"] == pytest.approx(14.0)
+    assert body["details"]["actual_b"] == pytest.approx(1.5)
+
+
+def test_post_transform_min_model_b_unset_with_floor_returns_412() -> None:
+    with _client(_app(model_size_b=None)) as client:
+        response = client.post("/v1/transform", json={"text": "hi", "mode": "dejargon"})
+
+    assert response.status_code == 412
+    assert response.json()["error"] == "backend_min_model_not_met"
+
+
+def test_post_transform_compose_chain_shares_budget_across_stages() -> None:
+    """Compose chains must enforce the per-request cost cap across the
+    whole chain, not reset per stage. Without the shared budgeter, a
+    3-stage chain at $0.05/request would actually allow $0.15.
+    """
+    backend = StubBackend(
+        queue=[GenerationResult(text=f"out-{i}", tokens_in=2, tokens_out=3) for i in range(8)]
+    )
+    # Per-stage scorer queue: each stage gets fresh "reject" verdicts so
+    # the trend abort fires on stagnation; with a shared budgeter the
+    # trend abort accumulates across stages.
+    app = _app(
+        backend=backend,
+        scorer_queues=[["reject"] * 8],
+    )
+
+    with _client(app) as client:
         response = client.post(
             "/v1/transform",
-            json={"text": "hi", "mode": ["dejargon", "register.casual"]},
+            json={
+                "text": "hi",
+                "mode": ["dejargon", "register.casual", "tone.us-to-uk"],
+                "intensity": 0.5,
+                "verification": {"max_retries": 5},
+            },
         )
 
-    assert response.status_code == 400
-    assert response.json()["error"] == "not_implemented"
+    assert response.status_code == 402
+    body = response.json()
+    assert body["error"] == "budget_exceeded"
+    # The shared budgeter accumulates attempts across stages; the trend
+    # window of 3 collapses on the third identical reject, so attempts
+    # never reach the per-stage retry cap.
+    assert body["details"]["reason"] == "non_improving_trend"
+
+
+def test_post_transform_compose_chain_returns_200_with_composite_score() -> None:
+    backend = StubBackend(
+        queue=[
+            GenerationResult(text="stage one out", tokens_in=2, tokens_out=3),
+            GenerationResult(text="stage two out", tokens_in=2, tokens_out=3),
+        ]
+    )
+    app = _app(
+        backend=backend,
+        # Two scorers per stage call: stage one + stage two + composite call.
+        scorer_queues=[["accept", "accept", "accept"]],
+    )
+
+    with _client(app) as client:
+        response = client.post(
+            "/v1/transform",
+            json={
+                "text": "hi",
+                "mode": ["dejargon", "register.casual"],
+                "intensity": 0.5,
+            },
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert isinstance(body["mode"], list)
+    assert [m["id"] for m in body["mode"]] == ["dejargon", "register.casual"]
+    assert body["composite_score"] is not None
+    assert body["transformed"] == "stage two out"
 
 
 # ---------------------------------------------------------------------------
@@ -205,14 +309,23 @@ def test_post_transform_streaming_off_default_serialised_as_off() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_get_modes_returns_three_seed_entries() -> None:
+def test_get_modes_returns_eight_seed_entries() -> None:
     with _client(_app()) as client:
         response = client.get("/v1/modes")
 
     assert response.status_code == 200
     body = response.json()
     ids = {entry["id"] for entry in body["modes"]}
-    assert ids == {"dejargon", "register.casual", "length.normalize"}
+    assert ids == {
+        "dejargon",
+        "register.casual",
+        "length.normalize",
+        "voice-match",
+        "style.match",
+        "tone.us-to-uk",
+        "simplify.grade-8",
+        "formal-to-warm",
+    }
 
 
 def test_get_mode_unknown_id_returns_404() -> None:
@@ -330,7 +443,13 @@ def test_post_transform_verification_failure_returns_422() -> None:
     backend = StubBackend(
         queue=[GenerationResult(text=str(i), tokens_in=1, tokens_out=1) for i in range(5)]
     )
-    app = _app(backend=backend, scorer_queues=[["reject", "reject", "reject", "reject"]])
+    # Disable trend abort so the retry loop reliably exhausts max_retries on
+    # identical reject scores; the trend-abort path has its own dedicated test.
+    app = _app(
+        backend=backend,
+        scorer_queues=[["reject", "reject", "reject", "reject"]],
+        budget=BudgetConfig(abort_on_non_improving_trend=False),
+    )
 
     with _client(app) as client:
         response = client.post(
@@ -348,6 +467,32 @@ def test_post_transform_verification_failure_returns_422() -> None:
     assert body["scores"]["rejection_reason"] == "cosine_similarity"
     assert "verdict" not in body["scores"]
     assert body["last_candidate"] == "3"
+
+
+def test_post_transform_budget_exceeded_on_non_improving_trend_returns_402() -> None:
+    backend = StubBackend(
+        queue=[GenerationResult(text=str(i), tokens_in=1, tokens_out=1) for i in range(5)]
+    )
+    app = _app(
+        backend=backend,
+        scorer_queues=[["reject", "reject", "reject", "reject"]],
+    )
+
+    with _client(app) as client:
+        response = client.post(
+            "/v1/transform",
+            json={
+                "text": "hi",
+                "mode": "dejargon",
+                "verification": {"max_retries": 4},
+            },
+        )
+
+    assert response.status_code == 402
+    body = response.json()
+    assert body["error"] == "budget_exceeded"
+    assert body["details"]["reason"] == "non_improving_trend"
+    assert body["details"]["attempts"] >= 3
 
 
 def test_create_app_without_scorers_raises() -> None:
@@ -392,3 +537,62 @@ def test_metrics_includes_injection_detected_counter_after_match() -> None:
     assert response.status_code == 200
     assert "transduce_injection_detected_total" in response.text
     assert 'category="ignore_previous_instructions"' in response.text
+
+
+def _multilingual_app(
+    *,
+    backend: StubBackend | None = None,
+) -> Litestar:
+    from transduce.language.detector import LanguageDetector
+    from transduce.verification.base import Scorer
+
+    backend = backend or StubBackend(queue=[GenerationResult(text="ok", tokens_in=2, tokens_out=2)])
+    scorers: list[Scorer] = [StubScorer(name="cosine_similarity")]
+    detector = LanguageDetector(languages=("en", "de", "fr"), default="en", min_confidence=0.5)
+    return create_app(
+        _config(),
+        backend=backend,
+        scorers=scorers,
+        language_detector=detector,
+    )
+
+
+def test_post_transform_german_input_on_english_only_mode_returns_415() -> None:
+    with _client(_multilingual_app()) as client:
+        response = client.post(
+            "/v1/transform",
+            json={
+                "text": (
+                    "Dies ist ein deutscher Satz mit ausreichend Wörtern zur "
+                    "eindeutigen Erkennung der Sprache."
+                ),
+                "mode": "dejargon",
+            },
+        )
+
+    assert response.status_code == 415
+    body = response.json()
+    assert body["error"] == "language_not_supported"
+    assert body["details"]["detected"] == "de"
+    assert body["details"]["mode_id"] == "dejargon"
+    assert body["details"]["supported"] == ["en"]
+
+
+def test_metrics_includes_language_unsupported_counter_after_rejection() -> None:
+    with _client(_multilingual_app()) as client:
+        client.post(
+            "/v1/transform",
+            json={
+                "text": (
+                    "Dies ist ein deutscher Satz mit ausreichend Wörtern zur "
+                    "eindeutigen Erkennung der Sprache."
+                ),
+                "mode": "dejargon",
+            },
+        )
+        response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "transduce_language_unsupported_total" in response.text
+    assert 'mode="dejargon"' in response.text
+    assert 'lang="de"' in response.text

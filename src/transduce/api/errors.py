@@ -21,15 +21,21 @@ from transduce.backends.base import (
     GenerationFailedError,
     GenerationTimeoutError,
 )
+from transduce.backends.concurrency import ConcurrencyLimitExceededError
+from transduce.backends.preconditions import BackendMinModelNotMetError
+from transduce.budget.budgeter import BudgetExceededError
 from transduce.injection.scanner import InputInjectionDetectedError
+from transduce.language.detector import LanguageNotSupportedError
 from transduce.pipeline.orchestrator import (
     CompositionNotImplementedError,
     VerificationFailedError,
 )
-from transduce.registry.static import ModeNotFoundError
+from transduce.registry.static import ModeNotFoundError, ModeVersionNotFoundError
+from transduce.verification.composite import CompositeVerificationFailedError
 
 _EXCEPTION_MAPPING: Mapping[type[BaseException], tuple[ErrorCode, int]] = {
     CompositionNotImplementedError: (ErrorCode.NOT_IMPLEMENTED, HTTPStatus.BAD_REQUEST),
+    ModeVersionNotFoundError: (ErrorCode.MODE_VERSION_NOT_FOUND, HTTPStatus.NOT_FOUND),
     ModeNotFoundError: (ErrorCode.MODE_NOT_FOUND, HTTPStatus.NOT_FOUND),
     BackendUnavailableError: (
         ErrorCode.BACKEND_UNAVAILABLE,
@@ -96,6 +102,23 @@ def domain_exception_handler(
             envelope.model_dump(mode="json"),
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
         )
+    if isinstance(exc, CompositeVerificationFailedError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.COMPOSITE_VERIFICATION_FAILED,
+            message=str(exc),
+            last_candidate=exc.last_candidate,
+            details={
+                "which_stage": exc.which_stage,
+                "failed_scorer": exc.outcome.failed_scorer,
+                "aggregate_score": exc.outcome.aggregate_score,
+                "rejection_reason": exc.outcome.rejection_reason,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
     if isinstance(exc, InputInjectionDetectedError):
         envelope = TransformError(
             request_id=request_id_for(request),
@@ -110,6 +133,71 @@ def domain_exception_handler(
         return Response(
             envelope.model_dump(mode="json"),
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
+    if isinstance(exc, LanguageNotSupportedError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.LANGUAGE_NOT_SUPPORTED,
+            message=str(exc),
+            details={
+                "detected": exc.detected,
+                "supported": list(exc.supported),
+                "mode_id": exc.mode_id,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+        )
+    if isinstance(exc, ConcurrencyLimitExceededError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.CONCURRENCY_LIMIT_EXCEEDED,
+            message=str(exc),
+            details={
+                "backend_id": exc.backend_id,
+                "limit": exc.limit,
+                "retry_after_s": exc.retry_after_s,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.TOO_MANY_REQUESTS,
+            headers={"Retry-After": f"{exc.retry_after_s:g}"},
+        )
+    if isinstance(exc, BudgetExceededError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.BUDGET_EXCEEDED,
+            message=str(exc),
+            details={
+                "reason": exc.reason,
+                "limit_usd": exc.limit,
+                "total_cost_usd": exc.state.total_cost_usd,
+                "attempts": exc.state.attempts,
+                "scores": list(exc.state.scores),
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.PAYMENT_REQUIRED,
+        )
+    if isinstance(exc, BackendMinModelNotMetError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.BACKEND_MIN_MODEL_NOT_MET,
+            message=str(exc),
+            details={
+                "mode_id": exc.mode_id,
+                "backend_id": exc.backend_id,
+                "backend_model": exc.backend_model,
+                "required_b": exc.required_b,
+                "actual_b": exc.actual_b,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.PRECONDITION_FAILED,
         )
     for exception_type, (code, status) in _EXCEPTION_MAPPING.items():
         if isinstance(exc, exception_type):

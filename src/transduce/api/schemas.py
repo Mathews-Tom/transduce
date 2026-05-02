@@ -20,17 +20,27 @@ from transduce.verification.negation import NegationDiffResult
 class ErrorCode(StrEnum):
     """Stable error codes returned in the ``TransformError`` envelope.
 
-    Includes v0.5 additions: ``input_injection_detected`` (P2-INJ-03) and
-    ``mode_hash_mismatch`` (P2-PLG-02). v1 adds ``language_not_supported``,
-    ``budget_exceeded``, ``concurrency_limit_exceeded``.
+    v0.5 additions: ``input_injection_detected`` (P2-INJ-03) and
+    ``mode_hash_mismatch`` (P2-PLG-02). v1 adds
+    ``language_not_supported`` (P3-LANG-03), ``budget_exceeded``
+    (P3-BUDG-04), ``concurrency_limit_exceeded`` (P3-BACK-06),
+    ``backend_min_model_not_met`` (P3-BACK-09),
+    ``mode_version_not_found`` (P3-VER-03), and
+    ``composite_verification_failed`` (P3-COMP-06).
     """
 
     MODE_NOT_FOUND = "mode_not_found"
+    MODE_VERSION_NOT_FOUND = "mode_version_not_found"
     MODE_HASH_MISMATCH = "mode_hash_mismatch"
     BACKEND_UNAVAILABLE = "backend_unavailable"
+    BACKEND_MIN_MODEL_NOT_MET = "backend_min_model_not_met"
     VERIFICATION_FAILED = "verification_failed"
+    COMPOSITE_VERIFICATION_FAILED = "composite_verification_failed"
     INPUT_TOO_LONG = "input_too_long"
     INPUT_INJECTION_DETECTED = "input_injection_detected"
+    LANGUAGE_NOT_SUPPORTED = "language_not_supported"
+    BUDGET_EXCEEDED = "budget_exceeded"
+    CONCURRENCY_LIMIT_EXCEEDED = "concurrency_limit_exceeded"
     GENERATION_FAILED = "generation_failed"
     NOT_IMPLEMENTED = "not_implemented"
     TIMEOUT = "timeout"
@@ -171,12 +181,18 @@ class CostBreakdown(BaseModel):
 
 
 class TransformResponse(BaseModel):
-    """Successful transformation response per docs/system-design.md §Data Models."""
+    """Successful transformation response per docs/system-design.md §Data Models.
+
+    ``mode`` is a single :class:`ModeRef` for single-mode requests and a
+    list of :class:`ModeRef` for compose chains (P3-COMP-01).
+    ``composite_score`` is populated only when the composite verifier
+    ran across a chain (P3-COMP-02).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     request_id: str = Field(min_length=1)
-    mode: ModeRef
+    mode: ModeRef | list[ModeRef]
     language: str = Field(min_length=1)
     original: str
     transformed: str
@@ -186,6 +202,7 @@ class TransformResponse(BaseModel):
     timing: TimingBreakdown
     retries: int = Field(ge=0)
     cost: CostBreakdown
+    composite_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class TransformError(BaseModel):

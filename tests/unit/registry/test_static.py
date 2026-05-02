@@ -32,12 +32,33 @@ def _make_spec(mode_id: str, *, prompt: str = "{{ input }}") -> ModeSpec:
     )
 
 
-def test_registry_loads_three_seed_modes_by_id() -> None:
+def test_registry_loads_eight_seed_modes_by_id() -> None:
     registry = build_default_registry()
 
     ids = {spec.id for spec in registry.list_modes()}
 
-    assert ids == {"dejargon", "register.casual", "length.normalize"}
+    assert ids == {
+        "dejargon",
+        "register.casual",
+        "length.normalize",
+        "voice-match",
+        "style.match",
+        "tone.us-to-uk",
+        "simplify.grade-8",
+        "formal-to-warm",
+    }
+
+
+def test_registry_v1_modes_resolve_with_expected_size_floors() -> None:
+    registry = build_default_registry()
+
+    assert registry.resolve("voice-match").backend_requirements.min_model_b == pytest.approx(14.0)
+    assert registry.resolve("style.match").backend_requirements.min_model_b == pytest.approx(14.0)
+    assert registry.resolve("tone.us-to-uk").backend_requirements.min_model_b == pytest.approx(7.0)
+    assert registry.resolve("simplify.grade-8").backend_requirements.min_model_b == pytest.approx(
+        7.0
+    )
+    assert registry.resolve("formal-to-warm").backend_requirements.min_model_b == pytest.approx(7.0)
 
 
 def test_registry_unknown_mode_id_raises_mode_not_found() -> None:
@@ -63,8 +84,8 @@ def test_registry_in_operator_reports_membership() -> None:
     assert "missing" not in registry
 
 
-def test_registry_rejects_duplicate_ids() -> None:
-    with pytest.raises(ValueError, match="duplicate mode id"):
+def test_registry_rejects_duplicate_id_version_pair() -> None:
+    with pytest.raises(ValueError, match="duplicate mode entry"):
         StaticRegistry([_make_spec("dup"), _make_spec("dup")])
 
 

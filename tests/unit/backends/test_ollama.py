@@ -234,3 +234,18 @@ def test_ollama_construction_rejects_empty_endpoint() -> None:
 def test_ollama_construction_rejects_empty_model() -> None:
     with pytest.raises(ValueError, match="model"):
         OllamaBackend(endpoint="http://ollama.local", model="")
+
+
+def test_ollama_cost_estimate_returns_none_for_local_backend() -> None:
+    backend = OllamaBackend(endpoint="http://ollama.local", model="qwen2.5:14b")
+
+    estimate = backend.cost_estimate(tokens_in=1000, tokens_out=500)
+
+    assert estimate is None
+
+
+def test_ollama_cost_estimate_negative_tokens_raises_value_error() -> None:
+    backend = OllamaBackend(endpoint="http://ollama.local", model="qwen2.5:14b")
+
+    with pytest.raises(ValueError, match="non-negative"):
+        backend.cost_estimate(tokens_in=-1, tokens_out=10)

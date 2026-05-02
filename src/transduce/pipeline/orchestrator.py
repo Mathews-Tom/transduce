@@ -1,11 +1,18 @@
-"""Five-stage transformation orchestrator (P1-PIPE-01..03).
+"""Transformation orchestrator (P1-PIPE-01..03, P3-COMP-01..06).
 
-Stages in order: resolve → generate → verify → retry → diff. The
-orchestrator owns the retry loop: when the verifier rejects a candidate,
-the next prompt is tightened with the failed scorer's name and span per
-docs/system-design.md §Verification Subsystem (CRITIC-style external
-feedback). Compose chains raise ``CompositionNotImplementedError`` so
-the API layer can map them onto ``not_implemented`` (P1-PIPE-02).
+Single-mode requests run the v0 five-stage pipeline (resolve → generate
+→ verify → retry → diff) with the v0.5 ensemble verifier and the v1
+budget guard. Compose chains (``mode: ["dejargon", "register.casual"]``)
+loop the same single-mode flow per stage, threading the upstream
+output into the downstream input, then run the
+:class:`CompositeVerifier` on the ``(original, final)`` pair to catch
+drift that accumulated across stages.
+
+Per-stage intensity is distributed multiplicatively so the composed
+effect approaches the global ``intensity`` setting (P3-COMP-03).
+Preservation rules are taken as the union across stages so a
+downstream stage cannot drop an upstream stage's required preserves
+(P3-COMP-04).
 """
 
 from __future__ import annotations
@@ -26,24 +33,39 @@ from transduce.api.schemas import (
     VerificationScores,
 )
 from transduce.backends.base import Backend
+from transduce.budget.budgeter import Budgeter, BudgetExceededError
+from transduce.config.schema import BudgetConfig
 from transduce.diff.word_level import compute_diff
 from transduce.injection.fence import SpotlightFence, build_fence
-from transduce.registry.spec import PreserveRule
+from transduce.pipeline.composition import per_stage_intensity, preservation_union
+from transduce.registry.spec import ModeSpec, PreserveRule
 from transduce.registry.static import StaticRegistry
 from transduce.verification.base import ScoreResult
+from transduce.verification.composite import (
+    CompositeVerificationFailedError,
+    CompositeVerifier,
+)
 from transduce.verification.negation import NegationDiffResult
 from transduce.verification.pipeline import PipelineOutcome, VerifierPipeline
 
+_MAX_RETRIES_CEILING: int = 5
+"""Hard ceiling on the per-request retry count (docs/system-design.md §Request Lifecycle)."""
+
 
 class CompositionNotImplementedError(RuntimeError):
-    """Compose chains arrive with v1 (P3-COMP-01)."""
+    """Reserved for paths that explicitly refuse compose chains (P1-PIPE-02)."""
 
 
 @dataclass(frozen=True)
 class OrchestratorResult:
-    """Internal result produced by ``Orchestrator.transform``."""
+    """Internal result produced by ``Orchestrator.transform``.
 
-    mode: ModeRef
+    ``mode`` is a single :class:`ModeRef` for single-mode requests and
+    a tuple of :class:`ModeRef` for compose chains. ``composite_score``
+    is populated only when the composite verifier ran (compose chains).
+    """
+
+    mode: ModeRef | tuple[ModeRef, ...]
     language: str
     original: str
     transformed: str
@@ -53,6 +75,19 @@ class OrchestratorResult:
     timing: TimingBreakdown
     retries: int
     cost: CostBreakdown
+    composite_score: float | None = None
+
+
+@dataclass(frozen=True)
+class _StageOutcome:
+    """Per-stage result produced inside a compose chain."""
+
+    transformed: str
+    scores: VerificationScores
+    attempts: tuple[AttemptCost, ...]
+    generate_ms: int
+    verify_ms: int
+    retries: int
 
 
 class VerificationFailedError(RuntimeError):
@@ -84,12 +119,14 @@ class Orchestrator:
         registry: StaticRegistry,
         backend: Backend,
         verifier: VerifierPipeline,
+        budget_config: BudgetConfig,
+        composite_verifier: CompositeVerifier | None = None,
         default_max_retries: int = 3,
         max_tokens_floor: int = 256,
         max_tokens_ratio: float = 1.5,
     ) -> None:
-        if default_max_retries < 0 or default_max_retries > 5:
-            raise ValueError("default_max_retries must be within [0, 5]")
+        if default_max_retries < 0 or default_max_retries > _MAX_RETRIES_CEILING:
+            raise ValueError(f"default_max_retries must be within [0, {_MAX_RETRIES_CEILING}]")
         if max_tokens_floor <= 0:
             raise ValueError("max_tokens_floor must be positive")
         if max_tokens_ratio <= 0:
@@ -97,6 +134,8 @@ class Orchestrator:
         self._registry = registry
         self._backend = backend
         self._verifier = verifier
+        self._composite_verifier = composite_verifier
+        self._budget_config = budget_config
         self._default_max_retries = default_max_retries
         self._max_tokens_floor = max_tokens_floor
         self._max_tokens_ratio = max_tokens_ratio
@@ -115,15 +154,21 @@ class Orchestrator:
         max_retries: int | None = None,
         request_id: str,
         language: str = "en",
+        max_cost_usd: float | None = None,
     ) -> OrchestratorResult:
         if isinstance(mode, list):
-            raise CompositionNotImplementedError(
-                "compose chains are not implemented in v0; pass a single mode id"
+            return await self._transform_compose(
+                text=text,
+                modes=mode,
+                intensity=intensity,
+                preserve=preserve,
+                max_retries=max_retries,
+                request_id=request_id,
+                language=language,
+                max_cost_usd=max_cost_usd,
             )
 
-        retries_cap = self._default_max_retries if max_retries is None else max_retries
-        if retries_cap < 0 or retries_cap > 5:
-            raise ValueError("max_retries must be within [0, 5]")
+        retries_cap = self._resolve_retries_cap(max_retries)
 
         resolve_start = time.perf_counter()
         spec = self._registry.resolve(mode)
@@ -132,6 +177,8 @@ class Orchestrator:
         effective_preserve = tuple(preserve) or spec.preserve_defaults
 
         max_tokens = max(self._max_tokens_floor, int(len(text) * self._max_tokens_ratio))
+
+        budgeter, budget_limit = self._make_budgeter(max_cost_usd)
 
         attempts: list[AttemptCost] = []
         fence = build_fence(text)
@@ -155,18 +202,24 @@ class Orchestrator:
                 temperature=0.0,
             )
             generate_total_ms += _elapsed_ms(generate_start)
+
+            attempt_cost = self._backend.cost_estimate(
+                tokens_in=candidate.tokens_in, tokens_out=candidate.tokens_out
+            )
+            budgeter.charge(cost=attempt_cost)
             attempts.append(
                 AttemptCost(
                     attempt=attempt + 1,
                     tokens_in=candidate.tokens_in,
                     tokens_out=candidate.tokens_out,
-                    usd=0.0,
+                    usd=attempt_cost or 0.0,
                 )
             )
 
             verify_start = time.perf_counter()
             outcome = self._verifier.run(text, candidate.text)
             verify_total_ms += _elapsed_ms(verify_start)
+            budgeter.record_score(score=_aggregate_score(outcome))
 
             if outcome.verdict == "accept":
                 diff_start = time.perf_counter()
@@ -192,6 +245,14 @@ class Orchestrator:
                     cost=_compose_cost(attempts),
                 )
 
+            allowed, reason = budgeter.can_retry()
+            if not allowed and reason is not None:
+                raise BudgetExceededError(
+                    reason=reason,
+                    state=budgeter.state,
+                    limit=budget_limit,
+                )
+
             if attempt == retries_cap:
                 raise VerificationFailedError(
                     last_candidate=candidate.text,
@@ -212,6 +273,224 @@ class Orchestrator:
         raise RuntimeError(  # pragma: no cover — loop above always exits via return or raise
             "orchestrator loop exited without producing a result"
         )
+
+    async def _transform_compose(
+        self,
+        *,
+        text: str,
+        modes: list[str],
+        intensity: float,
+        preserve: Sequence[PreserveRule],
+        max_retries: int | None,
+        request_id: str,
+        language: str,
+        max_cost_usd: float | None,
+    ) -> OrchestratorResult:
+        if not modes:
+            raise ValueError("compose chain must contain at least one mode")
+        if self._composite_verifier is None:
+            raise CompositionNotImplementedError(
+                "compose chains require a composite_verifier; orchestrator was built without one"
+            )
+
+        resolve_start = time.perf_counter()
+        specs: list[ModeSpec] = [self._registry.resolve(mode_id) for mode_id in modes]
+        resolve_ms = _elapsed_ms(resolve_start)
+        mode_refs: tuple[ModeRef, ...] = tuple(
+            ModeRef(id=spec.id, version=spec.version) for spec in specs
+        )
+
+        stage_intensity = per_stage_intensity(global_intensity=intensity, n_stages=len(specs))
+        union_preserve = (
+            tuple(preserve)
+            if preserve
+            else preservation_union(spec.preserve_defaults for spec in specs)
+        )
+
+        # The cost cap is per-request, not per-stage: a 3-stage chain at the
+        # default 0.05 USD ceiling must spend at most 0.05 USD across the
+        # whole chain. The shared budgeter also lets the trend abort
+        # accumulate across stages, so a chain that drifts into stagnation in
+        # later stages still aborts.
+        budgeter, budget_limit = self._make_budgeter(max_cost_usd)
+
+        current_text = text
+        all_attempts: list[AttemptCost] = []
+        generate_total_ms = 0
+        verify_total_ms = 0
+        last_stage_outcome_scores: VerificationScores | None = None
+        total_retries = 0
+
+        for spec in specs:
+            stage_result = await self._transform_single_stage(
+                input_text=current_text,
+                spec=spec,
+                intensity=stage_intensity,
+                preserve=union_preserve,
+                max_retries=max_retries,
+                budgeter=budgeter,
+                budget_limit=budget_limit,
+            )
+            current_text = stage_result.transformed
+            all_attempts.extend(stage_result.attempts)
+            generate_total_ms += stage_result.generate_ms
+            verify_total_ms += stage_result.verify_ms
+            last_stage_outcome_scores = stage_result.scores
+            total_retries += stage_result.retries
+
+        composite_outcome = self._composite_verifier.run(text, current_text)
+        if composite_outcome.verdict == "reject":
+            raise CompositeVerificationFailedError(
+                last_candidate=current_text,
+                outcome=composite_outcome,
+                which_stage=len(specs),
+            )
+
+        diff_start = time.perf_counter()
+        diff = tuple(compute_diff(text, current_text))
+        diff_ms = _elapsed_ms(diff_start)
+
+        if last_stage_outcome_scores is None:  # pragma: no cover — requires non-empty modes
+            raise RuntimeError("compose chain produced no per-stage scores")
+
+        return OrchestratorResult(
+            mode=mode_refs,
+            language=language,
+            original=text,
+            transformed=current_text,
+            diff=diff,
+            scores=last_stage_outcome_scores,
+            backend_used=BackendInfo(provider=self._backend.name, model=self._backend.model),
+            timing=TimingBreakdown(
+                resolve_ms=resolve_ms,
+                generate_ms=generate_total_ms,
+                verify_ms=verify_total_ms,
+                diff_ms=diff_ms,
+            ),
+            retries=total_retries,
+            cost=_compose_cost(all_attempts),
+            composite_score=composite_outcome.aggregate_score,
+        )
+
+    async def _transform_single_stage(
+        self,
+        *,
+        input_text: str,
+        spec: ModeSpec,
+        intensity: float,
+        preserve: Sequence[PreserveRule],
+        max_retries: int | None,
+        budgeter: Budgeter,
+        budget_limit: float,
+    ) -> _StageOutcome:
+        """Run the single-mode pipeline for one stage of a compose chain.
+
+        Mirrors the single-mode ``transform`` body but returns a stage-
+        scoped result instead of an :class:`OrchestratorResult` so the
+        compose loop can accumulate per-stage attempts, timings, and
+        retry counts. The ``budgeter`` is shared across stages so the
+        per-request cost cap and trend window apply to the whole chain
+        rather than resetting per stage.
+        """
+        retries_cap = self._resolve_retries_cap(max_retries)
+        max_tokens = max(self._max_tokens_floor, int(len(input_text) * self._max_tokens_ratio))
+
+        attempts: list[AttemptCost] = []
+        fence = build_fence(input_text)
+        rendered_prompt = self._render_prompt(
+            spec.prompt_template,
+            text=input_text,
+            intensity=intensity,
+            preserve=preserve,
+            failure_context=None,
+            fence=fence,
+        )
+
+        generate_total_ms = 0
+        verify_total_ms = 0
+
+        for attempt in range(retries_cap + 1):
+            generate_start = time.perf_counter()
+            candidate = await self._backend.generate(
+                rendered_prompt, max_tokens=max_tokens, temperature=0.0
+            )
+            generate_total_ms += _elapsed_ms(generate_start)
+
+            attempt_cost = self._backend.cost_estimate(
+                tokens_in=candidate.tokens_in, tokens_out=candidate.tokens_out
+            )
+            budgeter.charge(cost=attempt_cost)
+            attempts.append(
+                AttemptCost(
+                    attempt=attempt + 1,
+                    tokens_in=candidate.tokens_in,
+                    tokens_out=candidate.tokens_out,
+                    usd=attempt_cost or 0.0,
+                )
+            )
+
+            verify_start = time.perf_counter()
+            outcome = self._verifier.run(input_text, candidate.text)
+            verify_total_ms += _elapsed_ms(verify_start)
+            budgeter.record_score(score=_aggregate_score(outcome))
+
+            if outcome.verdict == "accept":
+                return _StageOutcome(
+                    transformed=candidate.text,
+                    scores=_compose_scores(outcome),
+                    attempts=tuple(attempts),
+                    generate_ms=generate_total_ms,
+                    verify_ms=verify_total_ms,
+                    retries=attempt,
+                )
+
+            allowed, reason = budgeter.can_retry()
+            if not allowed and reason is not None:
+                raise BudgetExceededError(
+                    reason=reason,
+                    state=budgeter.state,
+                    limit=budget_limit,
+                )
+            if attempt == retries_cap:
+                raise VerificationFailedError(
+                    last_candidate=candidate.text,
+                    scores=_compose_scores(outcome),
+                    retries=attempt,
+                    rejection_reason=outcome.rejection_reason,
+                )
+            rendered_prompt = self._render_prompt(
+                spec.prompt_template,
+                text=input_text,
+                intensity=intensity,
+                preserve=preserve,
+                failure_context=_failure_context(outcome),
+                fence=fence,
+            )
+
+        raise RuntimeError(  # pragma: no cover — loop above always exits via return or raise
+            "stage loop exited without producing a result"
+        )
+
+    def _resolve_retries_cap(self, max_retries: int | None) -> int:
+        """Coalesce the per-request override with the configured default."""
+        cap = self._default_max_retries if max_retries is None else max_retries
+        if cap < 0 or cap > _MAX_RETRIES_CEILING:
+            raise ValueError(f"max_retries must be within [0, {_MAX_RETRIES_CEILING}]")
+        return cap
+
+    def _make_budgeter(self, max_cost_usd: float | None) -> tuple[Budgeter, float]:
+        """Build a per-request :class:`Budgeter` and return it with its cap."""
+        effective_cap = (
+            max_cost_usd
+            if max_cost_usd is not None
+            else self._budget_config.max_cost_per_request_usd
+        )
+        budgeter = Budgeter(
+            max_cost_usd=effective_cap,
+            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
+            non_improving_window=self._budget_config.non_improving_window,
+        )
+        return budgeter, effective_cap
 
     def _render_prompt(
         self,
@@ -338,6 +617,20 @@ def _topical_similarity(results: Sequence[ScoreResult], cosine_value: float) -> 
         if result.name == "bidirectional_nli":
             return result.value
     return cosine_value
+
+
+def _aggregate_score(outcome: PipelineOutcome) -> float:
+    """Mean per-scorer value, used by the budgeter to detect a non-improving trend.
+
+    The mean is monotone in "how close did we get": a candidate that
+    bumps every scorer up by a hair is recorded as making progress; a
+    candidate that simply re-runs the same failure is recorded as
+    stagnant. Empty result lists yield 0.0 so the trend logic does not
+    spuriously trigger on edge cases.
+    """
+    if not outcome.results:
+        return 0.0
+    return sum(result.value for result in outcome.results) / len(outcome.results)
 
 
 def _coerce_negation_diff(result: ScoreResult | None) -> NegationDiffResult:

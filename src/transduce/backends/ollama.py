@@ -124,6 +124,12 @@ class OllamaBackend:
             )
         return BackendHealth(healthy=True)
 
+    def cost_estimate(self, *, tokens_in: int, tokens_out: int) -> float | None:
+        """Local Ollama runs on operator hardware; per-token USD cost is undefined."""
+        if tokens_in < 0 or tokens_out < 0:
+            raise ValueError("token counts must be non-negative")
+        return None
+
 
 def _to_generation_result(payload: dict[str, Any]) -> GenerationResult:
     """Convert an Ollama response body into a typed ``GenerationResult``."""
