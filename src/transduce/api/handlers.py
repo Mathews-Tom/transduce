@@ -94,6 +94,10 @@ async def post_transform(
     state.metrics.generation_duration_ms.labels(
         backend=result.backend_used.provider, mode=result.mode.id
     ).observe(result.timing.generate_ms)
+    if result.cost.usd_total > 0.0:
+        state.metrics.generation_cost_usd_total.labels(
+            backend=result.backend_used.provider, mode=result.mode.id
+        ).inc(result.cost.usd_total)
 
     return TransformResponse(
         request_id=request_id,

@@ -72,6 +72,7 @@ def create_app(
         registry=resolved_registry,
         backend=resolved_backend,
         verifier=verifier,
+        budget_config=config.budget,
         default_max_retries=config.verification.max_retries,
     )
     resolved_detector = language_detector or LanguageDetector(

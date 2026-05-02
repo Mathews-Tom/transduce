@@ -26,6 +26,8 @@ from transduce.api.schemas import (
     VerificationScores,
 )
 from transduce.backends.base import Backend
+from transduce.budget.budgeter import BudgetExceededError, Budgeter
+from transduce.config.schema import BudgetConfig
 from transduce.diff.word_level import compute_diff
 from transduce.injection.fence import SpotlightFence, build_fence
 from transduce.registry.spec import PreserveRule
@@ -84,6 +86,7 @@ class Orchestrator:
         registry: StaticRegistry,
         backend: Backend,
         verifier: VerifierPipeline,
+        budget_config: BudgetConfig,
         default_max_retries: int = 3,
         max_tokens_floor: int = 256,
         max_tokens_ratio: float = 1.5,
@@ -97,6 +100,7 @@ class Orchestrator:
         self._registry = registry
         self._backend = backend
         self._verifier = verifier
+        self._budget_config = budget_config
         self._default_max_retries = default_max_retries
         self._max_tokens_floor = max_tokens_floor
         self._max_tokens_ratio = max_tokens_ratio
@@ -115,6 +119,7 @@ class Orchestrator:
         max_retries: int | None = None,
         request_id: str,
         language: str = "en",
+        max_cost_usd: float | None = None,
     ) -> OrchestratorResult:
         if isinstance(mode, list):
             raise CompositionNotImplementedError(
@@ -132,6 +137,16 @@ class Orchestrator:
         effective_preserve = tuple(preserve) or spec.preserve_defaults
 
         max_tokens = max(self._max_tokens_floor, int(len(text) * self._max_tokens_ratio))
+
+        budgeter = Budgeter(
+            max_cost_usd=(
+                max_cost_usd
+                if max_cost_usd is not None
+                else self._budget_config.max_cost_per_request_usd
+            ),
+            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
+            non_improving_window=self._budget_config.non_improving_window,
+        )
 
         attempts: list[AttemptCost] = []
         fence = build_fence(text)
@@ -155,18 +170,24 @@ class Orchestrator:
                 temperature=0.0,
             )
             generate_total_ms += _elapsed_ms(generate_start)
+
+            attempt_cost = self._backend.cost_estimate(
+                tokens_in=candidate.tokens_in, tokens_out=candidate.tokens_out
+            )
+            budgeter.charge(cost=attempt_cost)
             attempts.append(
                 AttemptCost(
                     attempt=attempt + 1,
                     tokens_in=candidate.tokens_in,
                     tokens_out=candidate.tokens_out,
-                    usd=0.0,
+                    usd=attempt_cost or 0.0,
                 )
             )
 
             verify_start = time.perf_counter()
             outcome = self._verifier.run(text, candidate.text)
             verify_total_ms += _elapsed_ms(verify_start)
+            budgeter.record_score(score=_aggregate_score(outcome))
 
             if outcome.verdict == "accept":
                 diff_start = time.perf_counter()
@@ -190,6 +211,18 @@ class Orchestrator:
                     ),
                     retries=attempt,
                     cost=_compose_cost(attempts),
+                )
+
+            allowed, reason = budgeter.can_retry()
+            if not allowed and reason is not None:
+                raise BudgetExceededError(
+                    reason=reason,
+                    state=budgeter.state,
+                    limit=(
+                        max_cost_usd
+                        if max_cost_usd is not None
+                        else self._budget_config.max_cost_per_request_usd
+                    ),
                 )
 
             if attempt == retries_cap:
@@ -338,6 +371,20 @@ def _topical_similarity(results: Sequence[ScoreResult], cosine_value: float) -> 
         if result.name == "bidirectional_nli":
             return result.value
     return cosine_value
+
+
+def _aggregate_score(outcome: PipelineOutcome) -> float:
+    """Mean per-scorer value, used by the budgeter to detect a non-improving trend.
+
+    The mean is monotone in "how close did we get": a candidate that
+    bumps every scorer up by a hair is recorded as making progress; a
+    candidate that simply re-runs the same failure is recorded as
+    stagnant. Empty result lists yield 0.0 so the trend logic does not
+    spuriously trigger on edge cases.
+    """
+    if not outcome.results:
+        return 0.0
+    return sum(result.value for result in outcome.results) / len(outcome.results)
 
 
 def _coerce_negation_diff(result: ScoreResult | None) -> NegationDiffResult:

@@ -15,6 +15,7 @@ from transduce.backends.base import BackendCapabilities, BackendHealth, Generati
 from transduce.config.schema import (
     BackendEntry,
     BackendsConfig,
+    BudgetConfig,
     Config,
     LanguageConfig,
     ServiceConfig,
@@ -72,7 +73,11 @@ class StubScorer:
         )
 
 
-def _config(default_cosine_min: float = 0.85) -> Config:
+def _config(
+    default_cosine_min: float = 0.85,
+    *,
+    budget: BudgetConfig | None = None,
+) -> Config:
     return Config(
         service=ServiceConfig(),
         backends=BackendsConfig(
@@ -87,6 +92,7 @@ def _config(default_cosine_min: float = 0.85) -> Config:
             ],
         ),
         verification=VerificationConfig(default_cosine_min=default_cosine_min),
+        budget=budget or BudgetConfig(),
         language=LanguageConfig(),
     )
 
@@ -95,13 +101,14 @@ def _app(
     *,
     backend: StubBackend | None = None,
     scorer_queues: Sequence[Sequence[str]] | None = None,
+    budget: BudgetConfig | None = None,
 ) -> Litestar:
     from transduce.verification.base import Scorer
 
     backend = backend or StubBackend(queue=[GenerationResult(text="ok", tokens_in=2, tokens_out=2)])
     queues = scorer_queues or [["accept"]]
     scorers: list[Scorer] = [StubScorer(name="cosine_similarity", queue=list(queues[0]))]
-    return create_app(_config(), backend=backend, scorers=scorers)
+    return create_app(_config(budget=budget), backend=backend, scorers=scorers)
 
 
 def _client(app: Litestar) -> TestClient[Litestar]:
@@ -152,9 +159,7 @@ def test_post_transform_unknown_mode_returns_404_mode_not_found() -> None:
 
 def test_post_transform_unknown_version_returns_404_mode_version_not_found() -> None:
     with _client(_app()) as client:
-        response = client.post(
-            "/v1/transform", json={"text": "hi", "mode": "dejargon@9.9.9"}
-        )
+        response = client.post("/v1/transform", json={"text": "hi", "mode": "dejargon@9.9.9"})
 
     assert response.status_code == 404
     assert response.json()["error"] == "mode_version_not_found"
@@ -344,7 +349,13 @@ def test_post_transform_verification_failure_returns_422() -> None:
     backend = StubBackend(
         queue=[GenerationResult(text=str(i), tokens_in=1, tokens_out=1) for i in range(5)]
     )
-    app = _app(backend=backend, scorer_queues=[["reject", "reject", "reject", "reject"]])
+    # Disable trend abort so the retry loop reliably exhausts max_retries on
+    # identical reject scores; the trend-abort path has its own dedicated test.
+    app = _app(
+        backend=backend,
+        scorer_queues=[["reject", "reject", "reject", "reject"]],
+        budget=BudgetConfig(abort_on_non_improving_trend=False),
+    )
 
     with _client(app) as client:
         response = client.post(
@@ -362,6 +373,32 @@ def test_post_transform_verification_failure_returns_422() -> None:
     assert body["scores"]["rejection_reason"] == "cosine_similarity"
     assert "verdict" not in body["scores"]
     assert body["last_candidate"] == "3"
+
+
+def test_post_transform_budget_exceeded_on_non_improving_trend_returns_402() -> None:
+    backend = StubBackend(
+        queue=[GenerationResult(text=str(i), tokens_in=1, tokens_out=1) for i in range(5)]
+    )
+    app = _app(
+        backend=backend,
+        scorer_queues=[["reject", "reject", "reject", "reject"]],
+    )
+
+    with _client(app) as client:
+        response = client.post(
+            "/v1/transform",
+            json={
+                "text": "hi",
+                "mode": "dejargon",
+                "verification": {"max_retries": 4},
+            },
+        )
+
+    assert response.status_code == 402
+    body = response.json()
+    assert body["error"] == "budget_exceeded"
+    assert body["details"]["reason"] == "non_improving_trend"
+    assert body["details"]["attempts"] >= 3
 
 
 def test_create_app_without_scorers_raises() -> None:

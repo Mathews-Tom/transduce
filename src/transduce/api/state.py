@@ -40,6 +40,7 @@ class TransduceMetrics:
     injection_detected_total: Counter
     language_unsupported_total: Counter
     concurrency_rejections_total: Counter
+    generation_cost_usd_total: Counter
 
     @classmethod
     def build(cls) -> TransduceMetrics:
@@ -80,6 +81,12 @@ class TransduceMetrics:
                 "transduce_concurrency_rejections_total",
                 "Requests rejected because a backend's concurrency semaphore was exhausted.",
                 labelnames=("backend",),
+                registry=registry,
+            ),
+            generation_cost_usd_total=Counter(
+                "transduce_generation_cost_usd_total",
+                "Total USD cost of all generations grouped by backend and mode.",
+                labelnames=("backend", "mode"),
                 registry=registry,
             ),
         )

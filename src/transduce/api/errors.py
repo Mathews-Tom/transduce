@@ -22,6 +22,7 @@ from transduce.backends.base import (
     GenerationTimeoutError,
 )
 from transduce.backends.concurrency import ConcurrencyLimitExceededError
+from transduce.budget.budgeter import BudgetExceededError
 from transduce.injection.scanner import InputInjectionDetectedError
 from transduce.language.detector import LanguageNotSupportedError
 from transduce.pipeline.orchestrator import (
@@ -144,6 +145,23 @@ def domain_exception_handler(
             envelope.model_dump(mode="json"),
             status_code=HTTPStatus.TOO_MANY_REQUESTS,
             headers={"Retry-After": f"{exc.retry_after_s:g}"},
+        )
+    if isinstance(exc, BudgetExceededError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.BUDGET_EXCEEDED,
+            message=str(exc),
+            details={
+                "reason": exc.reason,
+                "limit_usd": exc.limit,
+                "total_cost_usd": exc.state.total_cost_usd,
+                "attempts": exc.state.attempts,
+                "scores": list(exc.state.scores),
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.PAYMENT_REQUIRED,
         )
     for exception_type, (code, status) in _EXCEPTION_MAPPING.items():
         if isinstance(exc, exception_type):
