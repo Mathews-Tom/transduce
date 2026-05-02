@@ -301,7 +301,7 @@ def test_manifest_verifier_profile_invalid_threshold_rejected(tmp_path: Path) ->
         "cosine_min = 1.5\n",
     )
 
-    with pytest.raises(ManifestError, match="verifier_profile.*failed validation"):
+    with pytest.raises(ManifestError, match=r"verifier_profile.*failed validation"):
         load_manifest(package)
 
 

@@ -79,8 +79,7 @@ def extract_date_tokens(text: str) -> list[str]:
             if any(consumed[start:end]):
                 continue
             spans.append((start, end, _normalise_token(match.group(0))))
-            for index in range(start, end):
-                consumed[index] = True
+            consumed[start:end] = [True] * (end - start)
     spans.sort()
     return [token for _, _, token in spans]
 
