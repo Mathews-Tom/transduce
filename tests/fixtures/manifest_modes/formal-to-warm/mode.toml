@@ -1,0 +1,17 @@
+[mode]
+id = "formal-to-warm"
+version = "1.0.0"
+description = "Soften formal correspondence while preserving facts."
+prompt_template = "prompts/formal-to-warm.j2"
+intensity_range = [0.0, 1.0]
+preserve_defaults = ["entities", "numbers", "urls"]
+supported_languages = ["en"]
+
+[mode.backend_requirements]
+min_model_b = 7.0
+
+[mode.verifier_profile]
+cosine_min = 0.85
+nli_min = 0.70
+hhem_min = 0.50
+preserve_dates = false

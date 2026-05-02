@@ -134,7 +134,7 @@ async def test_orchestrator_happy_path_returns_accept_after_one_generation() -> 
 
     assert result.transformed == "Reduced jargon."
     assert result.retries == 0
-    assert result.scores.verdict == "accept"
+    assert result.scores.rejection_reason is None
     assert result.scores.preserved == {"entities": True, "numbers": True, "urls": True}
     assert result.cost.tokens_in_total == 10
     assert result.cost.tokens_out_total == 4
@@ -163,6 +163,56 @@ async def test_orchestrator_retry_increments_count_on_verifier_reject() -> None:
     assert result.transformed == "ok"
     assert "scorer=cosine_similarity" in backend.prompts_seen[-1]
     assert "span='span-1'" in backend.prompts_seen[-1]
+
+
+async def test_retry_failure_context_names_scorer() -> None:
+    backend = ScriptedBackend(
+        responses=[
+            GenerationResult(text="bad", tokens_in=4, tokens_out=2),
+            GenerationResult(text="ok", tokens_in=4, tokens_out=2),
+        ]
+    )
+    scorers = [ScriptedScorer(name="negation_diff", queue=["reject", "accept"], span="did not")]
+
+    await _orchestrator(backend=backend, scorers=scorers, default_max_retries=1).transform(
+        text="hi",
+        mode="dejargon",
+        intensity=0.5,
+        preserve=[],
+        request_id="req-retry-scorer",
+    )
+
+    retry_prompt = backend.prompts_seen[-1]
+    assert "scorer=negation_diff" in retry_prompt
+    assert "do not add or remove negation cues" in retry_prompt
+
+
+async def test_retry_failure_context_names_span() -> None:
+    backend = ScriptedBackend(
+        responses=[
+            GenerationResult(text="bad", tokens_in=4, tokens_out=2),
+            GenerationResult(text="ok", tokens_in=4, tokens_out=2),
+        ]
+    )
+    scorers = [
+        ScriptedScorer(
+            name="entity_preservation",
+            queue=["reject", "accept"],
+            span="Acme Corp",
+        )
+    ]
+
+    await _orchestrator(backend=backend, scorers=scorers, default_max_retries=1).transform(
+        text="hi",
+        mode="dejargon",
+        intensity=0.5,
+        preserve=[],
+        request_id="req-retry-span",
+    )
+
+    retry_prompt = backend.prompts_seen[-1]
+    assert "span='Acme Corp'" in retry_prompt
+    assert "preserve every named entity from the source verbatim" in retry_prompt
 
 
 async def test_orchestrator_max_retries_exhausted_raises_verification_failed() -> None:

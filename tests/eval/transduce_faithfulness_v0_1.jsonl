@@ -1,0 +1,202 @@
+{"category": "negation", "original": "The deployment succeeded on the first attempt.", "candidate": "The deployment did not succeed on the first attempt.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "Customers can access the dashboard from mobile devices.", "candidate": "Customers cannot access the dashboard from mobile devices.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The migration finished within the maintenance window.", "candidate": "The migration did not finish within the maintenance window.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "Engineering reproduced the bug in staging.", "candidate": "Engineering could not reproduce the bug in staging.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "Compliance approved the new data retention policy.", "candidate": "Compliance has not approved the new data retention policy.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The team shipped the feature on schedule.", "candidate": "The team failed to ship the feature on schedule.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "Latency improved after the index rebuild.", "candidate": "Latency did not improve after the index rebuild.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "We met the quarterly revenue target.", "candidate": "We did not meet the quarterly revenue target.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The vendor delivered the equipment by Friday.", "candidate": "The vendor never delivered the equipment by Friday.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "Backups completed successfully overnight.", "candidate": "Backups did not complete successfully overnight.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The integration supports webhook callbacks.", "candidate": "The integration does not support webhook callbacks.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "All tests passed in the latest CI run.", "candidate": "Not all tests passed in the latest CI run.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The board approved the acquisition.", "candidate": "The board did not approve the acquisition.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "Onboarding completes within seven business days.", "candidate": "Onboarding does not complete within seven business days.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The patch resolves the regression we observed.", "candidate": "The patch does not resolve the regression we observed.", "label": "reject", "subcategory": "negation_inserted"}
+{"category": "negation", "original": "The deployment did not succeed on the first attempt.", "candidate": "The deployment succeeded on the first attempt.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "Customers cannot access the dashboard from mobile devices.", "candidate": "Customers can access the dashboard from mobile devices.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The migration did not finish within the maintenance window.", "candidate": "The migration finished within the maintenance window.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "Engineering could not reproduce the bug in staging.", "candidate": "Engineering reproduced the bug in staging.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "Compliance has not approved the new data retention policy.", "candidate": "Compliance approved the new data retention policy.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The team failed to ship the feature on schedule.", "candidate": "The team shipped the feature on schedule.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "Latency did not improve after the index rebuild.", "candidate": "Latency improved after the index rebuild.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "We did not meet the quarterly revenue target.", "candidate": "We met the quarterly revenue target.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The vendor never delivered the equipment by Friday.", "candidate": "The vendor delivered the equipment by Friday.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "Backups did not complete successfully overnight.", "candidate": "Backups completed successfully overnight.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The integration does not support webhook callbacks.", "candidate": "The integration supports webhook callbacks.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "Not all tests passed in the latest CI run.", "candidate": "All tests passed in the latest CI run.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The board did not approve the acquisition.", "candidate": "The board approved the acquisition.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "We are unable to refund the deposit.", "candidate": "We are able to refund the deposit.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The build cannot proceed without dependency resolution.", "candidate": "The build can proceed without dependency resolution.", "label": "reject", "subcategory": "negation_removed"}
+{"category": "negation", "original": "The deployment finished on time.", "candidate": "The deployment was completed on schedule.", "label": "accept", "subcategory": "paraphrase_no_negation"}
+{"category": "negation", "original": "Customers can use the dashboard on mobile.", "candidate": "Mobile users have access to the dashboard.", "label": "accept", "subcategory": "paraphrase_no_negation"}
+{"category": "negation", "original": "We met the revenue target this quarter.", "candidate": "Quarterly revenue hit the target.", "label": "accept", "subcategory": "paraphrase_no_negation"}
+{"category": "negation", "original": "Tests passed in CI.", "candidate": "CI showed all tests passing.", "label": "accept", "subcategory": "paraphrase_no_negation"}
+{"category": "negation", "original": "The vendor delivered on Friday.", "candidate": "Friday brought the vendor's delivery.", "label": "accept", "subcategory": "paraphrase_no_negation"}
+{"category": "entity", "original": "Acme Corp announced a partnership with Globex Industries.", "candidate": "The company announced a partnership with another firm.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Initech released a quarterly statement on Tuesday.", "candidate": "The vendor released a quarterly statement on Tuesday.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Sarah Mitchell joined the engineering team last month.", "candidate": "A new engineer joined the team last month.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "The Apex Foundation funded the research initiative.", "candidate": "A foundation funded the research initiative.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Helios Dynamics secured the procurement contract.", "candidate": "The vendor secured the procurement contract.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Northwind Trading reported strong revenue growth.", "candidate": "The retailer reported strong revenue growth.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Contoso Ltd. partnered with Fabrikam to launch the service.", "candidate": "Two firms partnered to launch the service.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "James Liu signed off on the architecture review.", "candidate": "A reviewer signed off on the architecture review.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Tailspin Toys recalled the affected product line.", "candidate": "The manufacturer recalled the affected product line.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Wide World Importers expanded into the European market.", "candidate": "The importer expanded into the European market.", "label": "reject", "subcategory": "entity_dropped"}
+{"category": "entity", "original": "Acme Corp announced a partnership with Globex Industries.", "candidate": "Initech announced a partnership with Globex Industries.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Sarah Mitchell joined the engineering team last month.", "candidate": "James Liu joined the engineering team last month.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "The Apex Foundation funded the research initiative.", "candidate": "The Helios Foundation funded the research initiative.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Northwind Trading reported strong revenue growth.", "candidate": "Tailspin Toys reported strong revenue growth.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Contoso Ltd. partnered with Fabrikam to launch the service.", "candidate": "Contoso Ltd. partnered with Northwind to launch the service.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "James Liu signed off on the architecture review.", "candidate": "Sarah Mitchell signed off on the architecture review.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Tailspin Toys recalled the affected product line.", "candidate": "Wide World Importers recalled the affected product line.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Wide World Importers expanded into the European market.", "candidate": "Contoso Ltd. expanded into the European market.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Helios Dynamics secured the procurement contract.", "candidate": "Apex Dynamics secured the procurement contract.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Initech released a quarterly statement on Tuesday.", "candidate": "Acme Corp released a quarterly statement on Tuesday.", "label": "reject", "subcategory": "entity_swapped"}
+{"category": "entity", "original": "Acme Corp announced a partnership with Globex Industries.", "candidate": "Acme Corporation announced a partnership with Globex Industries.", "label": "accept", "subcategory": "entity_normalized"}
+{"category": "entity", "original": "Sarah Mitchell joined the engineering team last month.", "candidate": "Sarah Mitchell joined our engineering team last month.", "label": "accept", "subcategory": "entity_normalized"}
+{"category": "entity", "original": "Northwind Trading reported strong revenue growth.", "candidate": "Northwind Trading saw strong revenue growth.", "label": "accept", "subcategory": "entity_normalized"}
+{"category": "entity", "original": "Contoso Ltd. partnered with Fabrikam to launch the service.", "candidate": "Contoso Ltd. teamed up with Fabrikam to launch the service.", "label": "accept", "subcategory": "entity_normalized"}
+{"category": "entity", "original": "Tailspin Toys recalled the affected product line.", "candidate": "Tailspin Toys issued a recall on the affected product line.", "label": "accept", "subcategory": "entity_normalized"}
+{"category": "entity", "original": "Apple Inc. published the annual report.", "candidate": "Apple Inc. released the annual report.", "label": "accept", "subcategory": "entity_substring_safe"}
+{"category": "entity", "original": "Apple Inc. introduced new accessibility features.", "candidate": "Apple introduced new accessibility features.", "label": "reject", "subcategory": "entity_truncated"}
+{"category": "entity", "original": "International Business Machines published the white paper.", "candidate": "IBM published the white paper.", "label": "reject", "subcategory": "entity_abbreviated"}
+{"category": "entity", "original": "The Linux Foundation hosts the project.", "candidate": "The Linux Foundation maintains the project.", "label": "accept", "subcategory": "entity_preserved"}
+{"category": "entity", "original": "Adobe Systems acquired the design platform.", "candidate": "Adobe Systems purchased the design platform.", "label": "accept", "subcategory": "entity_preserved"}
+{"category": "entity", "original": "Microsoft Research presented the findings at the conference.", "candidate": "Microsoft Research showcased the findings at the conference.", "label": "accept", "subcategory": "entity_preserved"}
+{"category": "entity", "original": "The OpenAPI Initiative published version 3.1 of the spec.", "candidate": "The OpenAPI Initiative published v3.1 of the spec.", "label": "accept", "subcategory": "entity_preserved"}
+{"category": "number", "original": "Revenue grew by 12.5% year over year.", "candidate": "Revenue grew by 1.25% year over year.", "label": "reject", "subcategory": "decimal_shifted"}
+{"category": "number", "original": "The error rate dropped to 0.012 percent.", "candidate": "The error rate dropped to 0.12 percent.", "label": "reject", "subcategory": "decimal_shifted"}
+{"category": "number", "original": "Latency improved from 250 ms to 80 ms.", "candidate": "Latency improved from 25 ms to 8 ms.", "label": "reject", "subcategory": "decimal_shifted"}
+{"category": "number", "original": "We allocated 4.5 million dollars for the project.", "candidate": "We allocated 45 million dollars for the project.", "label": "reject", "subcategory": "magnitude_shifted"}
+{"category": "number", "original": "The acquisition was valued at 94 billion dollars.", "candidate": "The acquisition was valued at 94 million dollars.", "label": "reject", "subcategory": "magnitude_shifted"}
+{"category": "number", "original": "Storage capacity is 256 GB.", "candidate": "Storage capacity is 256 MB.", "label": "reject", "subcategory": "unit_changed"}
+{"category": "number", "original": "The container holds 5 liters of fluid.", "candidate": "The container holds 5 gallons of fluid.", "label": "reject", "subcategory": "unit_changed"}
+{"category": "number", "original": "Response time should be under 100 ms.", "candidate": "Response time should be under 100 seconds.", "label": "reject", "subcategory": "unit_changed"}
+{"category": "number", "original": "The team grew from 12 to 30 engineers.", "candidate": "The team grew from 12 to 300 engineers.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "We onboarded 1500 new customers in Q3.", "candidate": "We onboarded 150 new customers in Q3.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "The contract is worth 250000 dollars annually.", "candidate": "The contract is worth 25000 dollars annually.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "Subscribers reached 2 million last quarter.", "candidate": "Subscribers reached 20 million last quarter.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "The deployment took 3 hours to complete.", "candidate": "The deployment took 30 hours to complete.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "We process 50 thousand events per second.", "candidate": "We process 5 thousand events per second.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "Memory usage peaked at 8 GB during the test.", "candidate": "Memory usage peaked at 80 GB during the test.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "The service handles 1.2 billion requests daily.", "candidate": "The service handles 1.2 trillion requests daily.", "label": "reject", "subcategory": "magnitude_word_changed"}
+{"category": "number", "original": "Operating costs reduced by 15%.", "candidate": "Operating costs reduced by 50%.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "The dataset contains 10 thousand labeled examples.", "candidate": "The dataset contains 10 million labeled examples.", "label": "reject", "subcategory": "magnitude_word_changed"}
+{"category": "number", "original": "Battery life is rated at 12 hours.", "candidate": "Battery life is rated at 2 hours.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "The discount applies to orders over 500 dollars.", "candidate": "The discount applies to orders over 50 dollars.", "label": "reject", "subcategory": "value_changed"}
+{"category": "number", "original": "We allocated 4.5 million dollars for the project.", "candidate": "We set aside 4.5 million dollars for the project.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Revenue grew by 12.5% year over year.", "candidate": "Year over year revenue grew 12.5%.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Latency improved from 250 ms to 80 ms.", "candidate": "Latency dropped from 250 ms to 80 ms.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "The team grew from 12 to 30 engineers.", "candidate": "The engineering team expanded from 12 to 30.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Storage capacity is 256 GB.", "candidate": "There is 256 GB of storage.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "We process 50 thousand events per second.", "candidate": "Throughput is 50 thousand events per second.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Subscribers reached 2 million last quarter.", "candidate": "Last quarter, subscribers hit 2 million.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "The contract is worth 250000 dollars annually.", "candidate": "The annual contract value is 250000 dollars.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Battery life is rated at 12 hours.", "candidate": "The battery is rated for 12 hours.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Operating costs reduced by 15%.", "candidate": "Costs of operation came down 15%.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "The discount applies to orders over 500 dollars.", "candidate": "Orders over 500 dollars get the discount.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "number", "original": "Memory usage peaked at 8 GB during the test.", "candidate": "Peak memory was 8 GB during testing.", "label": "accept", "subcategory": "value_preserved"}
+{"category": "antonym", "original": "The launch succeeded across all regions.", "candidate": "The launch failed across all regions.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Customers found the new flow easier.", "candidate": "Customers found the new flow harder.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Latency improved after the index rebuild.", "candidate": "Latency worsened after the index rebuild.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Engineering accepted the proposal yesterday.", "candidate": "Engineering rejected the proposal yesterday.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The vendor increased the discount.", "candidate": "The vendor decreased the discount.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Q3 revenue grew over Q2.", "candidate": "Q3 revenue shrank over Q2.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The migration finished early.", "candidate": "The migration finished late.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Reception of the keynote was warm.", "candidate": "Reception of the keynote was cold.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Adoption rose sharply this quarter.", "candidate": "Adoption fell sharply this quarter.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The CFO approved the budget cut.", "candidate": "The CFO denied the budget cut.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Customers reported faster page loads.", "candidate": "Customers reported slower page loads.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The board unanimously supported the merger.", "candidate": "The board unanimously opposed the merger.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The deal closed above expectations.", "candidate": "The deal closed below expectations.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Outages decreased after the rollout.", "candidate": "Outages increased after the rollout.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Errors became rarer with the new build.", "candidate": "Errors became more common with the new build.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The team started small and grew big.", "candidate": "The team started big and grew small.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Onboarding was straightforward for new hires.", "candidate": "Onboarding was confusing for new hires.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Developers found the API consistent.", "candidate": "Developers found the API inconsistent.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Compliance was satisfied with the audit.", "candidate": "Compliance was dissatisfied with the audit.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "Sales hit the optimistic forecast.", "candidate": "Sales hit the pessimistic forecast.", "label": "reject", "subcategory": "antonym_swap"}
+{"category": "antonym", "original": "The launch succeeded across all regions.", "candidate": "All regions saw a successful launch.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Customers found the new flow easier.", "candidate": "Users felt the new flow was simpler.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Latency improved after the index rebuild.", "candidate": "Index rebuild reduced latency.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Engineering accepted the proposal yesterday.", "candidate": "Yesterday Engineering signed off on the proposal.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Q3 revenue grew over Q2.", "candidate": "Quarter-over-quarter, Q3 revenue exceeded Q2.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Adoption rose sharply this quarter.", "candidate": "Quarterly adoption climbed sharply.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Reception of the keynote was warm.", "candidate": "The keynote met a warm reception.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Customers reported faster page loads.", "candidate": "Pages loaded faster according to customer reports.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Outages decreased after the rollout.", "candidate": "Post-rollout outages dropped.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Compliance was satisfied with the audit.", "candidate": "Compliance signed off on the audit.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "The board unanimously supported the merger.", "candidate": "All board members backed the merger.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Sales hit the optimistic forecast.", "candidate": "The optimistic forecast was achieved by sales.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Errors became rarer with the new build.", "candidate": "The new build reduced error rates.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Adoption climbed steadily.", "candidate": "Steady adoption growth was observed.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "antonym", "original": "Reliability matched last quarter's gains.", "candidate": "This quarter's reliability gains held.", "label": "accept", "subcategory": "paraphrase_no_swap"}
+{"category": "tense", "original": "The vendor delivered the equipment by Friday.", "candidate": "The vendor will deliver the equipment by Friday.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Compliance has approved the policy.", "candidate": "Compliance will approve the policy.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "The migration finished on Monday.", "candidate": "The migration is finishing on Monday.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Customers signed up at record rates.", "candidate": "Customers will sign up at record rates.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Engineering shipped four features.", "candidate": "Engineering is shipping four features.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "The board met last Thursday.", "candidate": "The board will meet last Thursday.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "We hit the revenue target.", "candidate": "We are hitting the revenue target.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Sales closed the contract in Q3.", "candidate": "Sales will close the contract in Q3.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Onboarding completed without issues.", "candidate": "Onboarding is completing without issues.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "The deployment succeeded yesterday.", "candidate": "The deployment will succeed yesterday.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Latency improved after the rebuild.", "candidate": "Latency is improving after the rebuild.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "The CFO presented the plan.", "candidate": "The CFO will present the plan.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Audit findings closed on time.", "candidate": "Audit findings are closing on time.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "The team merged the PR last night.", "candidate": "The team is merging the PR last night.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "Adoption rose during Q3.", "candidate": "Adoption is rising during Q3.", "label": "reject", "subcategory": "tense_shift"}
+{"category": "tense", "original": "The vendor delivered the equipment by Friday.", "candidate": "By Friday the vendor had delivered the equipment.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Compliance has approved the policy.", "candidate": "The policy has been approved by Compliance.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Engineering shipped four features.", "candidate": "Four features were shipped by Engineering.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "The board met last Thursday.", "candidate": "Thursday last week the board convened.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Sales closed the contract in Q3.", "candidate": "In Q3, Sales closed the contract.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Onboarding completed without issues.", "candidate": "Onboarding ran to completion without issues.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "The deployment succeeded yesterday.", "candidate": "Yesterday's deployment was successful.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Latency improved after the rebuild.", "candidate": "After the rebuild, latency was better.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "The CFO presented the plan.", "candidate": "The plan was presented by the CFO.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Adoption rose during Q3.", "candidate": "During Q3, adoption increased.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Audit findings closed on time.", "candidate": "All audit findings were closed on time.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "Customers signed up at record rates.", "candidate": "Record-rate sign-ups happened among customers.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "The migration finished on Monday.", "candidate": "Monday saw the migration finish.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "The team merged the PR last night.", "candidate": "Last night the team got the PR merged.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "tense", "original": "We hit the revenue target.", "candidate": "Revenue target achieved.", "label": "accept", "subcategory": "tense_preserved"}
+{"category": "fact_drift", "original": "Acme reported $4.2M in Q3 revenue.", "candidate": "Acme reported $4.2M in Q3 revenue, beating analyst expectations by 30%.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The CEO will speak at the conference in October.", "candidate": "The CEO is the keynote speaker at the conference in October.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Engineering shipped the feature on Monday.", "candidate": "Engineering shipped the feature on Monday despite intense pressure from the executive team.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Customers reported slower load times after the deploy.", "candidate": "Most customers reported slower load times after the deploy.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The migration finished within the maintenance window.", "candidate": "The migration finished within the maintenance window with zero data loss.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The board approved the acquisition.", "candidate": "The board unanimously approved the acquisition.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Latency dropped from 220ms to 180ms.", "candidate": "Latency dropped from 220ms to 180ms, a major improvement.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Q3 adoption reached 12% of active users.", "candidate": "Q3 adoption reached an impressive 12% of active users.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The vendor delivered on Friday.", "candidate": "The vendor delivered on Friday after a long delay.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Sales closed the contract in October.", "candidate": "Sales closed the lucrative contract in October.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The CFO presented the plan to the board.", "candidate": "The CFO presented the controversial plan to the board.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Onboarding completed within seven business days.", "candidate": "Onboarding completed within seven business days, faster than ever before.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The audit found three minor findings.", "candidate": "The audit found three minor findings of no material concern.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Customers can access the dashboard from mobile.", "candidate": "Customers can now access the dashboard from any mobile device.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Engineering reproduced the bug in staging.", "candidate": "Engineering quickly reproduced the bug in staging.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The release fixed three reported issues.", "candidate": "The release fixed all three reported issues.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "We met the quarterly target.", "candidate": "We exceeded the quarterly target.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The patch resolves the regression we observed.", "candidate": "The patch fully resolves the regression we observed.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Adoption is up across enterprise accounts.", "candidate": "Adoption is way up across enterprise accounts.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "The integration supports webhook callbacks.", "candidate": "The integration natively supports webhook callbacks.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Customers retained access during the cutover.", "candidate": "Customers retained full access during the cutover.", "label": "reject", "subcategory": "fact_added_or_strengthened"}
+{"category": "fact_drift", "original": "Acme reported $4.2M in Q3 revenue.", "candidate": "Q3 revenue at Acme reached $4.2M.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The CEO will speak at the conference in October.", "candidate": "October's conference will feature a talk by the CEO.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Engineering shipped the feature on Monday.", "candidate": "Monday saw Engineering ship the feature.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The migration finished within the maintenance window.", "candidate": "Within the maintenance window the migration was complete.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The board approved the acquisition.", "candidate": "The acquisition received board approval.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Latency dropped from 220ms to 180ms.", "candidate": "Latency went from 220ms down to 180ms.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Q3 adoption reached 12% of active users.", "candidate": "Active-user adoption hit 12% in Q3.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The vendor delivered on Friday.", "candidate": "Friday saw the vendor's delivery.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Sales closed the contract in October.", "candidate": "In October, Sales closed the contract.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The CFO presented the plan to the board.", "candidate": "The board heard the plan from the CFO.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Onboarding completed within seven business days.", "candidate": "All onboarding finished in seven business days or fewer.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Customers can access the dashboard from mobile.", "candidate": "Mobile users have dashboard access.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "Engineering reproduced the bug in staging.", "candidate": "The bug was reproduced by Engineering in staging.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The release fixed three reported issues.", "candidate": "Three reported issues were fixed in the release.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "We met the quarterly target.", "candidate": "Quarterly target met.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The patch resolves the regression we observed.", "candidate": "Our observed regression is resolved by the patch.", "label": "accept", "subcategory": "paraphrase_no_drift"}
+{"category": "fact_drift", "original": "The audit found three minor findings.", "candidate": "Three minor findings came out of the audit.", "label": "accept", "subcategory": "paraphrase_no_drift"}

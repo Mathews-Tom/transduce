@@ -173,3 +173,53 @@ def test_config_loads_example_yaml_succeeds() -> None:
     config = load_config(example, env={"TRANSDUCE_OLLAMA_ENDPOINT": "http://localhost:11434"})
 
     assert any(entry.provider == "ollama" for entry in config.backends.registry)
+
+
+def test_config_modes_default_is_allowlist_with_empty_packages(tmp_path: Path) -> None:
+    config = load_config(_write(tmp_path, _MIN_BACKEND))
+
+    assert config.modes.source == "allowlist"
+    assert config.modes.packages == []
+    assert config.modes.enforce_signing is False
+
+
+def test_config_modes_allowlist_round_trips_packages(tmp_path: Path) -> None:
+    body = (
+        _MIN_BACKEND + "\nmodes:\n"
+        "  source: allowlist\n"
+        "  enforce_signing: false\n"
+        "  packages:\n"
+        "    - name: transduce-mode-formal-to-warm\n"
+        "      version: '1.0.0'\n"
+        '      sha256: "' + ("a" * 64) + '"\n'
+        "      path: ./packages/formal-to-warm\n"
+        '      signed_by: "release@determ-ai"\n'
+    )
+
+    config = load_config(_write(tmp_path, body))
+
+    assert len(config.modes.packages) == 1
+    entry = config.modes.packages[0]
+    assert entry.name == "transduce-mode-formal-to-warm"
+    assert entry.signed_by == "release@determ-ai"
+
+
+def test_config_modes_packages_invalid_sha_length_rejected(tmp_path: Path) -> None:
+    body = (
+        _MIN_BACKEND + "\nmodes:\n"
+        "  packages:\n"
+        "    - name: x\n"
+        "      version: '1.0.0'\n"
+        '      sha256: "deadbeef"\n'
+        "      path: ./x\n"
+    )
+
+    with pytest.raises(ConfigError):
+        load_config(_write(tmp_path, body))
+
+
+def test_config_modes_source_unknown_rejected(tmp_path: Path) -> None:
+    body = _MIN_BACKEND + "\nmodes:\n  source: random\n"
+
+    with pytest.raises(ConfigError):
+        load_config(_write(tmp_path, body))

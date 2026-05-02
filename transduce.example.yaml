@@ -1,10 +1,9 @@
-# transduce reference configuration (v0).
+# transduce reference configuration (v0.5).
 #
-# Mirrors the v0 subset of docs/system-design.md §Configuration. Copy to
+# Mirrors the v0.5 subset of docs/system-design.md §Configuration. Copy to
 # transduce.yaml and replace placeholder values. Fields are validated by
 # Pydantic at service startup; missing required keys fail fast with an
-# actionable error. Phase 2 introduces the ``modes`` allowlist with
-# sha256 pinning; Phase 3 introduces ``observability`` (OTel) and
+# actionable error. v1 introduces ``observability`` (OTel) and
 # ``language.detector`` (fasttext-langid).
 
 service:
@@ -13,6 +12,15 @@ service:
   request_timeout_s: 30
   max_input_chars: 50000
   max_retries_default: 3
+
+# Mode allowlist — sha256-pinned packages, no auto-discovery (P2-PLG-01..P2-PLG-03).
+# Operators add a package by reviewing the manifest, computing its sha256
+# (see docs/migration-v0-to-v0.5.md), and listing it below. Auto-discovery
+# is opt-in via ``source: auto`` and emits a startup warning.
+modes:
+  source: allowlist
+  enforce_signing: false                  # v2 flips this default; ADR-0004
+  packages: []                            # populate with name, version, sha256, path
 
 backends:
   default: ollama_qwen
@@ -23,9 +31,18 @@ backends:
       model: gemma4
       concurrency_limit: 1               # ollama serializes per model
 
+# Verifier ensemble defaults (P2-VER-06..P2-VER-09).
+# Per-mode ``VerifierProfile`` overrides take precedence per docs/system-design.md
+# §Verification Subsystem. NLI and HHEM scorers are wired in by the operator's
+# bootstrap when the optional ``ensemble`` extra is installed; default thresholds
+# below are applied to any mode that does not declare its own.
 verification:
   enabled: true
   default_cosine_min: 0.85
+  default_nli_min: 0.70
+  default_hhem_min: 0.50
+  reject_on_negation_diff: true
+  injection_scanner: regex-pack-v0.5     # the v0.5 regex pack ships in core
   max_retries: 3
 
 language:

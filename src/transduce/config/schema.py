@@ -1,9 +1,9 @@
-"""Pydantic schema for the v0 service configuration.
+"""Pydantic schema for the v0.5 service configuration.
 
-Mirrors the v0 subset of docs/system-design.md §Configuration. The v0.5
-release extends ``modes`` (allowlist + sha256, P2-PLG-01..P2-PLG-06) and
-v1 extends ``observability`` (OTel GenAI SemConv, P3-OBS-01..P3-OBS-05)
-plus ``language.detector`` (fasttext, P3-LANG-01).
+Mirrors the v0.5 subset of docs/system-design.md §Configuration. The
+release adds the ``modes`` allowlist + sha256 section
+(P2-PLG-01..P2-PLG-03); v1 extends ``observability`` (OTel GenAI SemConv,
+P3-OBS-01..P3-OBS-05) plus ``language.detector`` (fasttext, P3-LANG-01).
 
 Each section sets ``extra="forbid"`` so typos surface as validation
 errors at startup rather than silently degrading behaviour.
@@ -63,12 +63,22 @@ class BackendsConfig(BaseModel):
 
 
 class VerificationConfig(BaseModel):
-    """Verifier subsystem defaults for the v0 cosine + preservation pipeline."""
+    """Verifier subsystem defaults for the v0.5 ensemble.
+
+    Per-mode ``VerifierProfile`` overrides take precedence; these defaults
+    apply to any mode that does not declare its own threshold.
+    ``injection_scanner`` is the name of the regex pack the operator is
+    running with; v0.5 ships ``regex-pack-v0.5`` in core.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
     default_cosine_min: float = Field(default=0.85, ge=0.0, le=1.0)
+    default_nli_min: float = Field(default=0.70, ge=0.0, le=1.0)
+    default_hhem_min: float = Field(default=0.50, ge=0.0, le=1.0)
+    reject_on_negation_diff: bool = True
+    injection_scanner: str = Field(default="regex-pack-v0.5", min_length=1)
     max_retries: int = Field(default=3, ge=0, le=5)
 
 
@@ -80,12 +90,40 @@ class LanguageConfig(BaseModel):
     default: str = Field(default="en", min_length=1)
 
 
+class ModePackageEntry(BaseModel):
+    """One pinned mode package in the allowlist (P2-PLG-01)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    sha256: str = Field(min_length=64, max_length=64)
+    path: str = Field(min_length=1, description="Filesystem path to the package root.")
+    signed_by: str | None = Field(default=None, min_length=1)
+
+
+class ModesConfig(BaseModel):
+    """Mode-loader configuration (P2-PLG-01..P2-PLG-03).
+
+    ``source`` defaults to ``allowlist``. Setting it to ``auto`` enables
+    legacy entry-point discovery and emits a startup warning per the
+    dev plan; production deployments must keep it on ``allowlist``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["allowlist", "auto"] = "allowlist"
+    enforce_signing: bool = False
+    packages: list[ModePackageEntry] = Field(default_factory=list)
+
+
 class Config(BaseModel):
-    """Full v0 service configuration."""
+    """Full v0.5 service configuration."""
 
     model_config = ConfigDict(extra="forbid")
 
     service: ServiceConfig = Field(default_factory=ServiceConfig)
+    modes: ModesConfig = Field(default_factory=ModesConfig)
     backends: BackendsConfig
     verification: VerificationConfig = Field(default_factory=VerificationConfig)
     language: LanguageConfig = Field(default_factory=LanguageConfig)

@@ -27,6 +27,7 @@ from transduce.api.state import TransduceMetrics, TransduceState
 from transduce.backends.base import Backend
 from transduce.backends.ollama import OllamaBackend
 from transduce.config.schema import Config
+from transduce.injection.scanner import InjectionScanner
 from transduce.pipeline.orchestrator import Orchestrator
 from transduce.registry.static import StaticRegistry, build_default_registry
 from transduce.verification.base import Scorer
@@ -50,6 +51,7 @@ def create_app(
     registry: StaticRegistry | None = None,
     scorers: list[Scorer] | None = None,
     metrics_state: TransduceMetrics | None = None,
+    injection_scanner: InjectionScanner | None = None,
 ) -> Litestar:
     """Build a Litestar app wired against ``config`` and optional overrides.
 
@@ -77,6 +79,7 @@ def create_app(
         verifier=verifier,
         orchestrator=orchestrator,
         metrics=metrics_state or TransduceMetrics.build(),
+        injection_scanner=injection_scanner or InjectionScanner(),
     )
 
     async def shutdown(app_instance: Litestar) -> None:

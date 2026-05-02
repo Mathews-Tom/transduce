@@ -38,7 +38,6 @@ def _valid_response_kwargs() -> dict[str, object]:
             cosine=0.91,
             preserved={"entities": True, "numbers": True, "urls": True},
             topical_similarity=0.91,
-            verdict="accept",
         ),
         "backend_used": BackendInfo(provider="ollama", model="qwen2.5:14b"),
         "timing": TimingBreakdown(resolve_ms=2, generate_ms=180, verify_ms=12, diff_ms=1),
@@ -120,16 +119,41 @@ def test_diff_op_invalid_op_rejected() -> None:
         DiffOp.model_validate({"op": "rewrite", "text": "x"})
 
 
-def test_verification_scores_verdict_outside_literal_rejected() -> None:
+def test_verification_scores_no_verdict_field_after_v0_migration() -> None:
+    """v0.5 (P2-MIG-02) removes the legacy ``verdict`` field; HTTP status carries it."""
     with pytest.raises(ValidationError):
         VerificationScores.model_validate(
             {
                 "cosine": 0.9,
                 "preserved": {"entities": True},
                 "topical_similarity": 0.9,
-                "verdict": "advisory",
+                "verdict": "accept",
             }
         )
+
+
+def test_verification_scores_negation_diff_defaults_empty() -> None:
+    scores = VerificationScores(
+        cosine=0.9,
+        preserved={"entities": True},
+        topical_similarity=0.9,
+    )
+
+    assert scores.negation_diff.added == ()
+    assert scores.negation_diff.removed == ()
+
+
+def test_verification_scores_optional_nli_defaults_to_none() -> None:
+    scores = VerificationScores(
+        cosine=0.9,
+        preserved={"entities": True},
+        topical_similarity=0.9,
+    )
+
+    assert scores.nli_forward is None
+    assert scores.nli_backward is None
+    assert scores.hhem is None
+    assert scores.mode_specific == {}
 
 
 def test_transform_response_round_trips_via_model_dump() -> None:
@@ -155,9 +179,11 @@ def test_transform_error_with_validation_error_code_matches_enum() -> None:
 def test_error_code_enum_matches_documented_codes() -> None:
     documented = {
         "mode_not_found",
+        "mode_hash_mismatch",
         "backend_unavailable",
         "verification_failed",
         "input_too_long",
+        "input_injection_detected",
         "generation_failed",
         "not_implemented",
         "timeout",

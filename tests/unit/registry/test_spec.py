@@ -92,14 +92,25 @@ def test_verifier_profile_defaults_match_dev_plan() -> None:
     profile = VerifierProfile()
 
     assert profile.cosine_min == pytest.approx(0.85)
+    assert profile.nli_min == pytest.approx(0.70)
+    assert profile.hhem_min == pytest.approx(0.50)
+    assert profile.reject_on_negation_diff is True
     assert profile.preserve_entities is True
     assert profile.preserve_numbers is True
     assert profile.preserve_urls is True
+    assert profile.preserve_dates is False
+    assert profile.length_min_ratio == pytest.approx(0.4)
+    assert profile.length_max_ratio == pytest.approx(2.0)
 
 
 def test_verifier_profile_cosine_min_above_one_rejected() -> None:
     with pytest.raises(ValidationError):
         VerifierProfile(cosine_min=1.5)
+
+
+def test_verifier_profile_inverted_length_band_rejected() -> None:
+    with pytest.raises(ValidationError):
+        VerifierProfile(length_min_ratio=0.9, length_max_ratio=0.5)
 
 
 def test_backend_requirements_negative_size_rejected() -> None:

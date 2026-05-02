@@ -1,10 +1,9 @@
-"""HTTP API contracts for transduce v0.
+"""HTTP API contracts for transduce.
 
-Mirrors docs/system-design.md §Data Models. The v0 subset omits compose
-chains, streaming-strict mode, language detection, cost-budget overrides,
-and ensemble-verifier scores; the v0.5 release widens ``VerificationScores``
-with NLI/HHEM/negation outputs (P2-VER-01..P2-VER-09) and v1 adds multi-mode
-dispatch (P3-COMP-01).
+Mirrors docs/system-design.md §Data Models. The v0.5 release widens
+``VerificationScores`` with NLI/HHEM/negation-diff fields (P2-VER-09);
+v1 adds multi-mode dispatch (P3-COMP-01) and streaming-advisory
+(P3-STR-01).
 """
 
 from __future__ import annotations
@@ -15,20 +14,23 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from transduce.registry.spec import PreserveRule
+from transduce.verification.negation import NegationDiffResult
 
 
 class ErrorCode(StrEnum):
     """Stable error codes returned in the ``TransformError`` envelope.
 
-    The v0 subset; later releases add ``input_injection_detected``
-    (P2-INJ-03), ``language_not_supported`` (P3-LANG-03),
-    ``budget_exceeded`` (P3-BUDG-04), and others.
+    Includes v0.5 additions: ``input_injection_detected`` (P2-INJ-03) and
+    ``mode_hash_mismatch`` (P2-PLG-02). v1 adds ``language_not_supported``,
+    ``budget_exceeded``, ``concurrency_limit_exceeded``.
     """
 
     MODE_NOT_FOUND = "mode_not_found"
+    MODE_HASH_MISMATCH = "mode_hash_mismatch"
     BACKEND_UNAVAILABLE = "backend_unavailable"
     VERIFICATION_FAILED = "verification_failed"
     INPUT_TOO_LONG = "input_too_long"
+    INPUT_INJECTION_DETECTED = "input_injection_detected"
     GENERATION_FAILED = "generation_failed"
     NOT_IMPLEMENTED = "not_implemented"
     TIMEOUT = "timeout"
@@ -99,18 +101,30 @@ class DiffOp(BaseModel):
 class VerificationScores(BaseModel):
     """Per-scorer outcomes attached to a transformation response.
 
-    The v0 subset reports cosine and preservation outcomes. ``topical_similarity``
-    is the client-facing aggregate per docs/system-design.md §Verification Subsystem.
-    The v0.5 release widens this with bidirectional NLI, HHEM, and negation-diff
-    fields (P2-VER-01..P2-VER-09).
+    The v0.5 ensemble reports cosine, bidirectional NLI (forward and
+    backward directions), HHEM factuality, the negation-diff structure,
+    preservation outcomes, and any mode-specific scorer outputs.
+    ``topical_similarity`` is the client-facing aggregate per
+    docs/system-design.md §Verification Subsystem.
+
+    Scorers that did not run because the ensemble short-circuited earlier
+    have their numeric fields set to ``None`` (e.g., a request that fails
+    cosine never runs NLI; ``nli_forward`` and ``nli_backward`` are
+    ``None`` in that response). The ``verdict`` literal field present in
+    v0 is removed in v0.5; the HTTP status (200 vs 422) carries the
+    accept/reject signal at the response level (P2-VER-09, P2-MIG-02).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     cosine: float = Field(ge=0.0, le=1.0)
+    nli_forward: float | None = Field(default=None, ge=0.0, le=1.0)
+    nli_backward: float | None = Field(default=None, ge=0.0, le=1.0)
+    hhem: float | None = Field(default=None, ge=0.0, le=1.0)
+    negation_diff: NegationDiffResult = Field(default_factory=NegationDiffResult)
     preserved: dict[str, bool]
+    mode_specific: dict[str, float] = Field(default_factory=dict)
     topical_similarity: float = Field(ge=0.0, le=1.0)
-    verdict: Literal["accept", "reject"]
     rejection_reason: str | None = None
 
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "transduce"
-version = "0.0.1"
+version = "0.5.0"
 description = "Mode-driven, ensemble-verified text transformation primitive."
 readme = "README.md"
 requires-python = ">=3.12"
