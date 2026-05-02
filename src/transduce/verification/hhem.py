@@ -62,20 +62,27 @@ class HHEMScorer:
 
 def build_hhem_scorer(
     model_name: str = _DEFAULT_MODEL,
+    *,
+    revision: str,
 ) -> HhemFactualityScorer:  # pragma: no cover - exercised in slow integration; covers IO at startup
     """Build a Vectara HHEM-2.1 factuality scorer for production use.
 
     Lazy-imports ``transformers`` so unit tests skip the weight load.
     Operators bear the one-time download cost on first call. Missing
     weights or missing optional dependency raises immediately.
+
+    ``revision`` is required and pins the Hugging Face Hub commit; an
+    attacker who compromises the repo cannot inject a different model
+    without changing the pin in the operator's bootstrap. Bandit B615
+    enforces this at CI time.
     """
     from transformers import (  # type: ignore[import-not-found]
         AutoModelForSequenceClassification,
         AutoTokenizer,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, revision=revision)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name, revision=revision)
     model.eval()
 
     def score_pair(original: str, candidate: str) -> float:
