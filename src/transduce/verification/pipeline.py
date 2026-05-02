@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from transduce.verification.base import Scorer, ScoreResult
 
@@ -20,7 +21,7 @@ from transduce.verification.base import Scorer, ScoreResult
 class PipelineOutcome:
     """Aggregate outcome of a verifier pipeline run."""
 
-    verdict: str
+    verdict: Literal["accept", "reject"]
     results: Sequence[ScoreResult]
     failed_scorer: str | None = None
     rejection_reason: str | None = None

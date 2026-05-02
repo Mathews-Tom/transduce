@@ -30,22 +30,17 @@ def _coerce_preserve(values: Iterable[PreserveRule]) -> tuple[PreserveRule, ...]
     return tuple(values)
 
 
+_MODE_RESPONSE_EXCLUDE = {"prompt_template"}
+
+
 def _mode_to_dict(spec: ModeSpec) -> dict[str, Any]:
-    return {
-        "id": spec.id,
-        "version": spec.version,
-        "description": spec.description,
-        "intensity_range": list(spec.intensity_range),
-        "preserve_defaults": [rule.value for rule in spec.preserve_defaults],
-        "supported_languages": list(spec.supported_languages),
-        "backend_requirements": {"min_model_b": spec.backend_requirements.min_model_b},
-        "verifier_profile": {
-            "cosine_min": spec.verifier_profile.cosine_min,
-            "preserve_entities": spec.verifier_profile.preserve_entities,
-            "preserve_numbers": spec.verifier_profile.preserve_numbers,
-            "preserve_urls": spec.verifier_profile.preserve_urls,
-        },
-    }
+    """Serialise a ``ModeSpec`` for the catalog response.
+
+    The prompt template is excluded — exposing it via ``GET /v1/modes`` would
+    leak the v0 prompts. Mode introspection with the rendered prompt is the
+    Phase 4 ``POST /v1/modes/{id}/render`` surface.
+    """
+    return spec.model_dump(mode="json", exclude=_MODE_RESPONSE_EXCLUDE)
 
 
 @post("/v1/transform")
