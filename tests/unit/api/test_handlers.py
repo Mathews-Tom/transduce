@@ -273,14 +273,23 @@ def test_post_transform_streaming_off_default_serialised_as_off() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_get_modes_returns_three_seed_entries() -> None:
+def test_get_modes_returns_eight_seed_entries() -> None:
     with _client(_app()) as client:
         response = client.get("/v1/modes")
 
     assert response.status_code == 200
     body = response.json()
     ids = {entry["id"] for entry in body["modes"]}
-    assert ids == {"dejargon", "register.casual", "length.normalize"}
+    assert ids == {
+        "dejargon",
+        "register.casual",
+        "length.normalize",
+        "voice-match",
+        "style.match",
+        "tone.us-to-uk",
+        "simplify.grade-8",
+        "formal-to-warm",
+    }
 
 
 def test_get_mode_unknown_id_returns_404() -> None:
