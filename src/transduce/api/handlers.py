@@ -18,6 +18,7 @@ from transduce.api.schemas import (
 )
 from transduce.api.state import TransduceState
 from transduce.backends.concurrency import ConcurrencyLimitExceededError
+from transduce.backends.preconditions import enforce_min_model_b
 from transduce.injection.scanner import InputInjectionDetectedError
 from transduce.language.detector import LanguageNotSupportedError
 from transduce.registry.spec import ModeSpec, PreserveRule
@@ -73,6 +74,13 @@ async def post_transform(
                 supported=mode_spec.supported_languages,
                 mode_id=mode_spec.id,
             )
+        enforce_min_model_b(
+            mode_id=mode_spec.id,
+            required_b=mode_spec.backend_requirements.min_model_b,
+            backend_id=state.backend_id,
+            backend_model=state.backend.model,
+            declared_b=state.backend_model_size_b,
+        )
 
     try:
         result = await state.orchestrator.transform(

@@ -26,7 +26,7 @@ from transduce.api.handlers import (
 from transduce.api.state import TransduceMetrics, TransduceState
 from transduce.backends.base import Backend
 from transduce.backends.ollama import OllamaBackend
-from transduce.config.schema import Config
+from transduce.config.schema import BackendEntry, Config
 from transduce.injection.scanner import InjectionScanner
 from transduce.language.detector import LanguageDetector
 from transduce.pipeline.orchestrator import Orchestrator
@@ -73,7 +73,8 @@ def create_app(
         raise ValueError("scorers must be supplied; production wiring builds them from config")
 
     resolved_registry = registry or build_default_registry()
-    resolved_backend = backend or _build_default_backend(config)
+    default_entry = _resolve_default_entry(config)
+    resolved_backend = backend or _build_default_backend(config, default_entry)
     verifier = VerifierPipeline(scorers)
     resolved_composite = composite_verifier or CompositeVerifier(
         scorers=scorers,
@@ -102,6 +103,8 @@ def create_app(
         metrics=metrics_state or TransduceMetrics.build(),
         injection_scanner=injection_scanner or InjectionScanner(),
         language_detector=resolved_detector,
+        backend_id=default_entry.id,
+        backend_model_size_b=default_entry.model_size_b,
     )
 
     async def shutdown(app_instance: Litestar) -> None:
@@ -133,26 +136,32 @@ def create_app(
     return litestar_app
 
 
-def _build_default_backend(config: Config) -> Backend:
-    """Build the default Ollama backend from ``config.backends`` selection.
-
-    Phase-3 widens ``BackendEntry`` with cloud providers and optional
-    endpoints; the v1 backend dispatch table replaces this helper. Until
-    then the wiring narrows ``endpoint`` for the ollama path the
-    validator already guarantees, and rejects anything else loudly.
-    """
+def _resolve_default_entry(config: Config) -> BackendEntry:
+    """Return the BackendEntry referenced by ``config.backends.default``."""
     default_id = config.backends.default
     for entry in config.backends.registry:
-        if entry.id != default_id:
-            continue
-        if entry.provider != "ollama":
-            raise RuntimeError(
-                f"backend {entry.id!r}: provider {entry.provider!r} not yet wired in app factory"
-            )
-        if entry.endpoint is None:  # pragma: no cover — validator enforces this for ollama
-            raise RuntimeError(f"backend {entry.id!r}: ollama provider requires an endpoint")
-        return OllamaBackend(endpoint=entry.endpoint, model=entry.model)
+        if entry.id == default_id:
+            return entry
     raise RuntimeError(f"backends.default {default_id!r} missing from registry at app build time")
+
+
+def _build_default_backend(config: Config, entry: BackendEntry) -> Backend:
+    """Build the default backend from the resolved registry entry.
+
+    The CLI ``serve`` command builds the full provider dispatch table.
+    The app factory only handles the ollama path so unit tests can
+    construct an app without bringing in the cloud SDK clients; passing
+    ``backend=`` to :func:`create_app` is the production seam.
+    """
+    del config  # entry already resolved
+    if entry.provider != "ollama":
+        raise RuntimeError(
+            f"backend {entry.id!r}: provider {entry.provider!r} requires CLI wiring; "
+            "pass backend= to create_app() in tests or use ``transduce serve`` in prod"
+        )
+    if entry.endpoint is None:  # pragma: no cover — validator enforces this for ollama
+        raise RuntimeError(f"backend {entry.id!r}: ollama provider requires an endpoint")
+    return OllamaBackend(endpoint=entry.endpoint, model=entry.model)
 
 
 __all__ = ["attach_request_id", "create_app"]

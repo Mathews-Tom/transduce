@@ -22,6 +22,7 @@ from transduce.backends.base import (
     GenerationTimeoutError,
 )
 from transduce.backends.concurrency import ConcurrencyLimitExceededError
+from transduce.backends.preconditions import BackendMinModelNotMetError
 from transduce.budget.budgeter import BudgetExceededError
 from transduce.injection.scanner import InputInjectionDetectedError
 from transduce.language.detector import LanguageNotSupportedError
@@ -180,6 +181,23 @@ def domain_exception_handler(
         return Response(
             envelope.model_dump(mode="json"),
             status_code=HTTPStatus.PAYMENT_REQUIRED,
+        )
+    if isinstance(exc, BackendMinModelNotMetError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.BACKEND_MIN_MODEL_NOT_MET,
+            message=str(exc),
+            details={
+                "mode_id": exc.mode_id,
+                "backend_id": exc.backend_id,
+                "backend_model": exc.backend_model,
+                "required_b": exc.required_b,
+                "actual_b": exc.actual_b,
+            },
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.PRECONDITION_FAILED,
         )
     for exception_type, (code, status) in _EXCEPTION_MAPPING.items():
         if isinstance(exc, exception_type):

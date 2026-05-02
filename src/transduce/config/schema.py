@@ -72,6 +72,18 @@ class BackendEntry(BaseModel):
     timeout_s: float = Field(default=60.0, gt=0.0)
     cost_in_per_million_usd: float | None = Field(default=None, ge=0.0)
     cost_out_per_million_usd: float | None = Field(default=None, ge=0.0)
+    model_size_b: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Backend model size in billions of parameters used by the "
+            "min_model_b precondition (P3-BACK-09). Operators must declare "
+            "this for any backend they want to serve modes with a min_model_b "
+            "floor; the precondition raises 412 when the declared size is "
+            "below the mode's requirement, or when the mode requires a floor "
+            "and the backend leaves model_size_b unset."
+        ),
+    )
     prompt_alias: str | None = Field(
         default=None,
         min_length=1,

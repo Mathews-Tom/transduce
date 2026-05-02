@@ -77,6 +77,7 @@ def _config(
     default_cosine_min: float = 0.85,
     *,
     budget: BudgetConfig | None = None,
+    model_size_b: float | None = 14.0,
 ) -> Config:
     return Config(
         service=ServiceConfig(),
@@ -88,6 +89,7 @@ def _config(
                     provider="ollama",
                     endpoint="http://ollama.local:11434",
                     model="qwen2.5:1.5b",
+                    model_size_b=model_size_b,
                 )
             ],
         ),
@@ -102,13 +104,18 @@ def _app(
     backend: StubBackend | None = None,
     scorer_queues: Sequence[Sequence[str]] | None = None,
     budget: BudgetConfig | None = None,
+    model_size_b: float | None = 14.0,
 ) -> Litestar:
     from transduce.verification.base import Scorer
 
     backend = backend or StubBackend(queue=[GenerationResult(text="ok", tokens_in=2, tokens_out=2)])
     queues = scorer_queues or [["accept"]]
     scorers: list[Scorer] = [StubScorer(name="cosine_similarity", queue=list(queues[0]))]
-    return create_app(_config(budget=budget), backend=backend, scorers=scorers)
+    return create_app(
+        _config(budget=budget, model_size_b=model_size_b),
+        backend=backend,
+        scorers=scorers,
+    )
 
 
 def _client(app: Litestar) -> TestClient[Litestar]:
@@ -163,6 +170,28 @@ def test_post_transform_unknown_version_returns_404_mode_version_not_found() -> 
 
     assert response.status_code == 404
     assert response.json()["error"] == "mode_version_not_found"
+
+
+def test_post_transform_min_model_b_violation_returns_412() -> None:
+    # ``dejargon`` requires min_model_b=14.0; declaring 1.5B forces the
+    # precondition to fail before any generation runs.
+    with _client(_app(model_size_b=1.5)) as client:
+        response = client.post("/v1/transform", json={"text": "hi", "mode": "dejargon"})
+
+    assert response.status_code == 412
+    body = response.json()
+    assert body["error"] == "backend_min_model_not_met"
+    assert body["details"]["mode_id"] == "dejargon"
+    assert body["details"]["required_b"] == pytest.approx(14.0)
+    assert body["details"]["actual_b"] == pytest.approx(1.5)
+
+
+def test_post_transform_min_model_b_unset_with_floor_returns_412() -> None:
+    with _client(_app(model_size_b=None)) as client:
+        response = client.post("/v1/transform", json={"text": "hi", "mode": "dejargon"})
+
+    assert response.status_code == 412
+    assert response.json()["error"] == "backend_min_model_not_met"
 
 
 def test_post_transform_compose_chain_returns_200_with_composite_score() -> None:

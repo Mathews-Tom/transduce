@@ -27,6 +27,8 @@ class TransduceState:
     metrics: TransduceMetrics
     injection_scanner: InjectionScanner
     language_detector: LanguageDetector
+    backend_id: str
+    backend_model_size_b: float | None
 
 
 @dataclass
