@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "transduce"
+version = "0.0.0"
+description = "Mode-driven, ensemble-verified text transformation primitive."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "transduce contributors" },
+]
+keywords = ["llm", "text-transformation", "verification", "nli", "local-first"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Mathews-Tom/transduce"
+Repository = "https://github.com/Mathews-Tom/transduce"
+Issues = "https://github.com/Mathews-Tom/transduce/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.24,<1",
+    "pytest-cov>=5,<6",
+    "pytest-xdist>=3.6,<4",
+    "ruff>=0.7,<1",
+    "mypy>=1.13,<2",
+    "pre-commit>=4,<5",
+    "pip-audit>=2.7,<3",
+    "bandit>=1.7,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/transduce"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/transduce",
+    "LICENSE",
+    "README.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
+]
