@@ -56,3 +56,66 @@ include = [
     "CODE_OF_CONDUCT.md",
     "SECURITY.md",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "RUF",    # ruff-specific
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "TID",    # flake8-tidy-imports
+    "PTH",    # flake8-use-pathlib
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit (security)
+]
+ignore = [
+    "S101",   # assert is fine in tests
+    "E501",   # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["transduce"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/transduce"]
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+extra_checks = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+skips = ["B101"]  # assert is fine
