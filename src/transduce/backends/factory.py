@@ -87,9 +87,7 @@ def _build_inner(
             raise BackendFactoryError(
                 f"backend {entry.id!r}: {entry.provider!r} requires an endpoint"
             )
-        optional_api_key: str | None = (
-            environ.get(entry.api_key_env) if entry.api_key_env else None
-        )
+        optional_api_key: str | None = environ.get(entry.api_key_env) if entry.api_key_env else None
         return OpenAICompatBackend(
             name=entry.provider,
             endpoint=entry.endpoint,
