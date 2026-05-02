@@ -98,7 +98,10 @@ class Orchestrator:
         self._default_max_retries = default_max_retries
         self._max_tokens_floor = max_tokens_floor
         self._max_tokens_ratio = max_tokens_ratio
-        self._jinja = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 — prompts feed an LLM
+        self._jinja = Environment(
+            undefined=StrictUndefined,
+            autoescape=False,  # noqa: S701  # nosec B701 — prompts feed an LLM, not HTML
+        )
 
     async def transform(
         self,

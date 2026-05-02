@@ -55,7 +55,10 @@ def build_default_registry() -> StaticRegistry:
 
 def _validate_prompt_template(spec: ModeSpec) -> None:
     """Compile the Jinja template at registry construction so syntax errors fail fast."""
-    environment = Environment(undefined=StrictUndefined, autoescape=False)  # noqa: S701 — prompts feed an LLM, not HTML
+    environment = Environment(
+        undefined=StrictUndefined,
+        autoescape=False,  # noqa: S701  # nosec B701 — prompts feed an LLM, not HTML
+    )
     try:
         environment.from_string(spec.prompt_template)
     except TemplateError as exc:

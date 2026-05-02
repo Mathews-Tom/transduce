@@ -20,7 +20,10 @@ class ServiceConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    host: str = Field(default="0.0.0.0", min_length=1)  # noqa: S104 — server bind default per docs/system-design.md §Configuration
+    host: str = Field(
+        default="0.0.0.0",  # noqa: S104  # nosec B104 — server bind default per docs/system-design.md §Configuration
+        min_length=1,
+    )
     port: int = Field(default=8080, ge=1, le=65_535)
     request_timeout_s: float = Field(default=30.0, gt=0.0)
     max_input_chars: int = Field(default=50_000, gt=0)
