@@ -16,7 +16,6 @@ permissions:
 
 env:
   PYTHONUNBUFFERED: "1"
-  UV_NO_SYNC: "0"
 
 jobs:
   lint-typecheck-test:

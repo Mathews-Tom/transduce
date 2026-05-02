@@ -46,7 +46,7 @@ USER transduce
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import socket,sys,os; s=socket.socket(); s.settimeout(2); \
+    CMD python -c "import os, socket; s=socket.socket(); s.settimeout(2); \
     s.connect((os.environ.get('TRANSDUCE_HOST','127.0.0.1'), int(os.environ.get('TRANSDUCE_PORT','8080')))); \
     s.close()" || exit 1
 

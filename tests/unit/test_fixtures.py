@@ -5,15 +5,21 @@ These tests assert the contracts that downstream verifier tests rely on:
 - every pair has the required string fields,
 - every pair declares a valid label drawn from the accept/reject vocabulary,
 - the per-corpus reject categories match the corpus's purpose so that the
-  scorer-specific suites can filter on category without surprises.
+  scorer-specific suites can filter on category without surprises,
+- and the underlying ``load_corpus`` validator rejects each malformed input
+  shape it advertises in its message contract.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 import pytest
+
+from tests.helpers.corpora import load_corpus
 
 VALID_LABELS: frozenset[str] = frozenset({"accept", "reject"})
 MIN_PAIRS_PER_CORPUS: int = 30
@@ -122,3 +128,31 @@ def test_total_corpus_pair_count_meets_foundation_target(
         + len(date_pairs)
     )
     assert total >= 200, f"total corpus pairs {total} below dev-plan F-05 target of 200"
+
+
+@pytest.mark.unit
+def test_load_corpus_missing_file_raises_filenotfounderror(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="fixture corpus missing"):
+        load_corpus("nonexistent", fixtures_dir=tmp_path)
+
+
+@pytest.mark.unit
+def test_load_corpus_non_list_root_raises_valueerror(tmp_path: Path) -> None:
+    (tmp_path / "broken.json").write_text(json.dumps({"not": "a list"}), encoding="utf-8")
+    with pytest.raises(ValueError, match="must contain a JSON array"):
+        load_corpus("broken", fixtures_dir=tmp_path)
+
+
+@pytest.mark.unit
+def test_load_corpus_non_dict_item_raises_valueerror(tmp_path: Path) -> None:
+    (tmp_path / "broken.json").write_text(json.dumps(["not-an-object"]), encoding="utf-8")
+    with pytest.raises(ValueError, match=r"\[0\] must be an object"):
+        load_corpus("broken", fixtures_dir=tmp_path)
+
+
+@pytest.mark.unit
+def test_load_corpus_missing_required_field_raises_valueerror(tmp_path: Path) -> None:
+    payload = [{"original": "hi"}]  # missing "transformed"
+    (tmp_path / "broken.json").write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="missing required string field 'transformed'"):
+        load_corpus("broken", fixtures_dir=tmp_path)
