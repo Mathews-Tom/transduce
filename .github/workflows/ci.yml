@@ -95,7 +95,10 @@ jobs:
         run: uv run bandit -c pyproject.toml -r src/
 
       - name: pip-audit (dependency CVEs)
-        run: uv run pip-audit --strict
+        # --strict would fail on the local-only project package not being on PyPI;
+        # pip-audit default still exits non-zero on any vulnerability finding, so
+        # CVE blocking remains.
+        run: uv run pip-audit
 
       - name: Gitleaks (secret scan)
         uses: gitleaks/gitleaks-action@v2

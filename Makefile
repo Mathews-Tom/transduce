@@ -49,7 +49,7 @@ security: ## Run bandit security checks
 	$(UV) run bandit -c pyproject.toml -r src/
 
 audit: ## Audit installed dependencies for known vulnerabilities
-	$(UV) run pip-audit --strict
+	$(UV) run pip-audit
 
 precommit: ## Run all configured pre-commit hooks against every file
 	$(UV) run pre-commit run --all-files
