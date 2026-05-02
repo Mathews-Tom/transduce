@@ -1,0 +1,166 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "transduce"
+version = "0.0.0"
+description = "Mode-driven, ensemble-verified text transformation primitive."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    { name = "transduce contributors" },
+]
+keywords = ["llm", "text-transformation", "verification", "nli", "local-first"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Mathews-Tom/transduce"
+Repository = "https://github.com/Mathews-Tom/transduce"
+Issues = "https://github.com/Mathews-Tom/transduce/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3,<10",
+    "pytest-asyncio>=0.24,<2",
+    "pytest-cov>=6,<8",
+    "pytest-xdist>=3.6,<4",
+    "ruff>=0.7,<1",
+    "mypy>=1.13,<2",
+    "pre-commit>=4,<5",
+    "pip-audit>=2.7,<3",
+    "bandit>=1.7,<2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/transduce"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/transduce",
+    "LICENSE",
+    "README.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "RUF",    # ruff-specific
+    "C4",     # flake8-comprehensions
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "TID",    # flake8-tidy-imports
+    "PTH",    # flake8-use-pathlib
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit (security)
+]
+ignore = [
+    "S101",   # assert is fine in tests
+    "E501",   # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["transduce"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+]
+markers = [
+    "unit: fast unit tests with no I/O",
+    "integration: tests that exercise real dependencies",
+    "e2e: end-to-end tests against the running service",
+    "security: security-focused tests",
+    "perf: performance benchmarks",
+    "eval: faithfulness/injection eval suite",
+    "slow: long-running tests excluded from default integration runs",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:_pytest.*",
+    "ignore:No data was collected:",
+    "ignore:Failed to generate report:",
+]
+
+[tool.coverage.run]
+source = ["src/transduce"]
+branch = true
+omit = [
+    "src/transduce/__init__.py",
+    "src/transduce/*/__init__.py",
+    "src/transduce/cli/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "@overload",
+]
+show_missing = true
+skip_covered = false
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/transduce", "tests"]
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+extra_checks = true
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "build", "dist"]
+skips = ["B101"]  # assert is fine

@@ -1,0 +1,78 @@
+# transduce reference configuration
+#
+# Mirrors docs/system-design.md §Configuration. Copy to transduce.yaml and
+# replace placeholder values. Schema is validated at service startup; missing
+# required keys fail fast with an actionable error.
+
+service:
+  host: 0.0.0.0
+  port: 8080
+  request_timeout_s: 30
+  max_input_chars: 50000
+  max_cost_per_request_usd: 0.05
+  max_retries_default: 3
+
+modes:
+  source: allowlist                       # never "auto" - supply-chain protection
+  enforce_signing: false                  # set true in production
+  packages:
+    # Replace with real package coordinates and sha256 pins before deploying.
+    - name: transduce-modes-core
+      version: "0.0.0"
+      sha256: "REPLACE_WITH_PACKAGE_SHA256"
+      signed_by: "REPLACE_WITH_SIGSTORE_IDENTITY"
+  python_plugins:
+    sandbox: subprocess                   # never inline
+    strip_env_vars:
+      - "ANTHROPIC_API_KEY"
+      - "OPENAI_API_KEY"
+      - "*_TOKEN"
+      - "*_SECRET"
+
+backends:
+  default: ollama_qwen
+  registry:
+    - id: ollama_qwen
+      provider: ollama
+      endpoint: ${TRANSDUCE_OLLAMA_ENDPOINT:-http://localhost:11434}
+      model: qwen2.5:14b
+      concurrency_limit: 1               # ollama serializes per model
+    - id: vllm_qwen
+      provider: vllm
+      endpoint: http://localhost:8000
+      model: Qwen/Qwen2.5-14B-Instruct
+      concurrency_limit: 32              # vLLM batches
+    - id: anthropic_haiku
+      provider: anthropic
+      api_key_env: ANTHROPIC_API_KEY
+      model: claude-haiku-4-5
+      concurrency_limit: 16
+    - id: litellm_router
+      provider: litellm
+      config_path: ./litellm.yaml
+
+verification:
+  enabled: true
+  embedder_en: BAAI/bge-small-en-v1.5
+  embedder_multi: BAAI/bge-m3
+  nli_model: lytang/MiniCheck-Flan-T5-Large
+  hhem_model: vectara/hallucination_evaluation_model
+  injection_scanner: prompt-armor
+  default_cosine_min: 0.85
+  default_nli_min: 0.70
+  default_hhem_min: 0.50
+  reject_on_negation_diff: true
+  max_retries: 3
+  abort_on_non_improving_trend: true     # last 3 retries must improve
+
+observability:
+  otel_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4317}
+  semconv: gen_ai                        # GenAI SemConv compliant
+  log_level: INFO
+  metrics_enabled: true
+  redact_text_in_spans: true             # ban raw text from span attributes
+  debug_include_text: false              # never enable in production
+
+language:
+  detector: fasttext-langid
+  default: en

@@ -1,0 +1,40 @@
+name: transduce
+
+services:
+  ollama:
+    image: ollama/ollama:0.4.4
+    container_name: transduce-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  transduce:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: transduce:dev
+    container_name: transduce-service
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      TRANSDUCE_HOST: "0.0.0.0"
+      TRANSDUCE_PORT: "8080"
+      TRANSDUCE_OLLAMA_ENDPOINT: "http://ollama:11434"
+    volumes:
+      - ./transduce.example.yaml:/etc/transduce/config.yaml:ro
+
+volumes:
+  ollama-models:
+    driver: local
