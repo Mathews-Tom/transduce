@@ -65,7 +65,7 @@ async def post_transform(
         state.metrics.requests_total.labels(mode=_mode_label(data.mode), verdict="error").inc()
         raise
 
-    state.metrics.requests_total.labels(mode=result.mode.id, verdict=result.scores.verdict).inc()
+    state.metrics.requests_total.labels(mode=result.mode.id, verdict="accept").inc()
     state.metrics.generation_duration_ms.labels(
         backend=result.backend_used.provider, mode=result.mode.id
     ).observe(result.timing.generate_ms)

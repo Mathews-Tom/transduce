@@ -66,12 +66,27 @@ class BidirectionalNLIScorer:
             raise ValueError("nli scorer requires non-empty original and candidate")
         forward = self._direction_score(original, candidate)
         if forward.minimum < self._threshold:
-            return self._reject(forward, direction="forward")
+            return self._reject(
+                forward,
+                direction="forward",
+                forward_value=forward.minimum,
+                backward_value=None,
+            )
         backward = self._direction_score(candidate, original)
         if backward.minimum < self._threshold:
-            return self._reject(backward, direction="backward")
+            return self._reject(
+                backward,
+                direction="backward",
+                forward_value=forward.minimum,
+                backward_value=backward.minimum,
+            )
         aggregate = min(forward.minimum, backward.minimum)
-        return ScoreResult(name=self.name, value=aggregate, verdict="accept")
+        return ScoreResult(
+            name=self.name,
+            value=aggregate,
+            verdict="accept",
+            details={"forward": forward.minimum, "backward": backward.minimum},
+        )
 
     def _direction_score(self, premise: str, hypothesis: str) -> _DirectionScore:
         premise_chunks = list(_chunk_text(premise, self._max_chunk_chars))
@@ -95,7 +110,17 @@ class BidirectionalNLIScorer:
                 failing_chunk = hypothesis
         return _DirectionScore(minimum=minimum, failing_chunk=failing_chunk)
 
-    def _reject(self, direction_score: _DirectionScore, *, direction: str) -> ScoreResult:
+    def _reject(
+        self,
+        direction_score: _DirectionScore,
+        *,
+        direction: str,
+        forward_value: float,
+        backward_value: float | None,
+    ) -> ScoreResult:
+        details: dict[str, float] = {"forward": forward_value}
+        if backward_value is not None:
+            details["backward"] = backward_value
         return ScoreResult(
             name=self.name,
             value=direction_score.minimum,
@@ -105,6 +130,7 @@ class BidirectionalNLIScorer:
                 f"below threshold {self._threshold:.3f}"
             ),
             span=direction_score.failing_chunk,
+            details=details,
         )
 
 

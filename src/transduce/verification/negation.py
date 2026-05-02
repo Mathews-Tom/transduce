@@ -149,8 +149,12 @@ class NegationDiffScorer:
 
     def score(self, original: str, candidate: str) -> ScoreResult:
         diff = diff_negation_cues(original, candidate)
+        details: dict[str, list[str]] = {
+            "added": list(diff.added),
+            "removed": list(diff.removed),
+        }
         if not diff.added and not diff.removed:
-            return ScoreResult(name=self.name, value=1.0, verdict="accept")
+            return ScoreResult(name=self.name, value=1.0, verdict="accept", details=dict(details))
         if diff.added and diff.removed:
             reason = (
                 f"negation cues changed: added {list(diff.added)}, removed {list(diff.removed)}"
@@ -168,6 +172,7 @@ class NegationDiffScorer:
             verdict="reject",
             rejection_reason=reason,
             span=span,
+            details=dict(details),
         )
 
 

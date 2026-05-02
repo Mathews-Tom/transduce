@@ -179,7 +179,8 @@ def test_post_transform_returns_200_with_diff_and_scores() -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["transformed"] == "hello earth"
-    assert body["scores"]["verdict"] == "accept"
+    assert body["scores"]["rejection_reason"] is None
+    assert "verdict" not in body["scores"]
     assert body["mode"] == {"id": "dejargon", "version": "0.1.0"}
     assert body["language"] == "en"
     assert body["backend_used"] == {"provider": "ollama", "model": "qwen2.5:1.5b"}
@@ -344,7 +345,8 @@ def test_post_transform_verification_failure_returns_422() -> None:
     assert response.status_code == 422
     body = response.json()
     assert body["error"] == "verification_failed"
-    assert body["scores"]["verdict"] == "reject"
+    assert body["scores"]["rejection_reason"] == "cosine_similarity"
+    assert "verdict" not in body["scores"]
     assert body["last_candidate"] == "3"
 
 

@@ -134,7 +134,7 @@ async def test_orchestrator_happy_path_returns_accept_after_one_generation() -> 
 
     assert result.transformed == "Reduced jargon."
     assert result.retries == 0
-    assert result.scores.verdict == "accept"
+    assert result.scores.rejection_reason is None
     assert result.scores.preserved == {"entities": True, "numbers": True, "urls": True}
     assert result.cost.tokens_in_total == 10
     assert result.cost.tokens_out_total == 4
