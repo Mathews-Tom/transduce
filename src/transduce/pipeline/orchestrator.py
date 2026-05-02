@@ -48,6 +48,9 @@ from transduce.verification.composite import (
 from transduce.verification.negation import NegationDiffResult
 from transduce.verification.pipeline import PipelineOutcome, VerifierPipeline
 
+_MAX_RETRIES_CEILING: int = 5
+"""Hard ceiling on the per-request retry count (docs/system-design.md §Request Lifecycle)."""
+
 
 class CompositionNotImplementedError(RuntimeError):
     """Reserved for paths that explicitly refuse compose chains (P1-PIPE-02)."""
@@ -122,8 +125,8 @@ class Orchestrator:
         max_tokens_floor: int = 256,
         max_tokens_ratio: float = 1.5,
     ) -> None:
-        if default_max_retries < 0 or default_max_retries > 5:
-            raise ValueError("default_max_retries must be within [0, 5]")
+        if default_max_retries < 0 or default_max_retries > _MAX_RETRIES_CEILING:
+            raise ValueError(f"default_max_retries must be within [0, {_MAX_RETRIES_CEILING}]")
         if max_tokens_floor <= 0:
             raise ValueError("max_tokens_floor must be positive")
         if max_tokens_ratio <= 0:
@@ -165,9 +168,7 @@ class Orchestrator:
                 max_cost_usd=max_cost_usd,
             )
 
-        retries_cap = self._default_max_retries if max_retries is None else max_retries
-        if retries_cap < 0 or retries_cap > 5:
-            raise ValueError("max_retries must be within [0, 5]")
+        retries_cap = self._resolve_retries_cap(max_retries)
 
         resolve_start = time.perf_counter()
         spec = self._registry.resolve(mode)
@@ -177,15 +178,7 @@ class Orchestrator:
 
         max_tokens = max(self._max_tokens_floor, int(len(text) * self._max_tokens_ratio))
 
-        budgeter = Budgeter(
-            max_cost_usd=(
-                max_cost_usd
-                if max_cost_usd is not None
-                else self._budget_config.max_cost_per_request_usd
-            ),
-            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
-            non_improving_window=self._budget_config.non_improving_window,
-        )
+        budgeter, budget_limit = self._make_budgeter(max_cost_usd)
 
         attempts: list[AttemptCost] = []
         fence = build_fence(text)
@@ -257,11 +250,7 @@ class Orchestrator:
                 raise BudgetExceededError(
                     reason=reason,
                     state=budgeter.state,
-                    limit=(
-                        max_cost_usd
-                        if max_cost_usd is not None
-                        else self._budget_config.max_cost_per_request_usd
-                    ),
+                    limit=budget_limit,
                 )
 
             if attempt == retries_cap:
@@ -323,20 +312,7 @@ class Orchestrator:
         # whole chain. The shared budgeter also lets the trend abort
         # accumulate across stages, so a chain that drifts into stagnation in
         # later stages still aborts.
-        budgeter = Budgeter(
-            max_cost_usd=(
-                max_cost_usd
-                if max_cost_usd is not None
-                else self._budget_config.max_cost_per_request_usd
-            ),
-            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
-            non_improving_window=self._budget_config.non_improving_window,
-        )
-        budget_limit = (
-            max_cost_usd
-            if max_cost_usd is not None
-            else self._budget_config.max_cost_per_request_usd
-        )
+        budgeter, budget_limit = self._make_budgeter(max_cost_usd)
 
         current_text = text
         all_attempts: list[AttemptCost] = []
@@ -416,10 +392,7 @@ class Orchestrator:
         per-request cost cap and trend window apply to the whole chain
         rather than resetting per stage.
         """
-        retries_cap = self._default_max_retries if max_retries is None else max_retries
-        if retries_cap < 0 or retries_cap > 5:
-            raise ValueError("max_retries must be within [0, 5]")
-
+        retries_cap = self._resolve_retries_cap(max_retries)
         max_tokens = max(self._max_tokens_floor, int(len(input_text) * self._max_tokens_ratio))
 
         attempts: list[AttemptCost] = []
@@ -497,6 +470,27 @@ class Orchestrator:
         raise RuntimeError(  # pragma: no cover — loop above always exits via return or raise
             "stage loop exited without producing a result"
         )
+
+    def _resolve_retries_cap(self, max_retries: int | None) -> int:
+        """Coalesce the per-request override with the configured default."""
+        cap = self._default_max_retries if max_retries is None else max_retries
+        if cap < 0 or cap > _MAX_RETRIES_CEILING:
+            raise ValueError(f"max_retries must be within [0, {_MAX_RETRIES_CEILING}]")
+        return cap
+
+    def _make_budgeter(self, max_cost_usd: float | None) -> tuple[Budgeter, float]:
+        """Build a per-request :class:`Budgeter` and return it with its cap."""
+        effective_cap = (
+            max_cost_usd
+            if max_cost_usd is not None
+            else self._budget_config.max_cost_per_request_usd
+        )
+        budgeter = Budgeter(
+            max_cost_usd=effective_cap,
+            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
+            non_improving_window=self._budget_config.non_improving_window,
+        )
+        return budgeter, effective_cap
 
     def _render_prompt(
         self,
