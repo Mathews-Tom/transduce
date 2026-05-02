@@ -61,16 +61,15 @@ async def post_transform(
 
     detected_language = state.language_detector.detect(data.text)
     if isinstance(data.mode, str):
-        mode_id_for_lang_check = data.mode
-        mode_spec = state.registry.resolve(mode_id_for_lang_check)
+        mode_spec = state.registry.resolve(data.mode)
         if detected_language not in mode_spec.supported_languages:
             state.metrics.language_unsupported_total.labels(
-                mode=mode_id_for_lang_check, lang=detected_language
+                mode=mode_spec.id, lang=detected_language
             ).inc()
             raise LanguageNotSupportedError(
                 detected=detected_language,
                 supported=mode_spec.supported_languages,
-                mode_id=mode_id_for_lang_check,
+                mode_id=mode_spec.id,
             )
 
     try:

@@ -63,8 +63,8 @@ def test_registry_in_operator_reports_membership() -> None:
     assert "missing" not in registry
 
 
-def test_registry_rejects_duplicate_ids() -> None:
-    with pytest.raises(ValueError, match="duplicate mode id"):
+def test_registry_rejects_duplicate_id_version_pair() -> None:
+    with pytest.raises(ValueError, match="duplicate mode entry"):
         StaticRegistry([_make_spec("dup"), _make_spec("dup")])
 
 

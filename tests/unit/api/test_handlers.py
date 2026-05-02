@@ -150,6 +150,16 @@ def test_post_transform_unknown_mode_returns_404_mode_not_found() -> None:
     assert response.json()["error"] == "mode_not_found"
 
 
+def test_post_transform_unknown_version_returns_404_mode_version_not_found() -> None:
+    with _client(_app()) as client:
+        response = client.post(
+            "/v1/transform", json={"text": "hi", "mode": "dejargon@9.9.9"}
+        )
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "mode_version_not_found"
+
+
 def test_post_transform_compose_chain_returns_400_not_implemented() -> None:
     with _client(_app()) as client:
         response = client.post(

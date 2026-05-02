@@ -28,10 +28,11 @@ from transduce.pipeline.orchestrator import (
     CompositionNotImplementedError,
     VerificationFailedError,
 )
-from transduce.registry.static import ModeNotFoundError
+from transduce.registry.static import ModeNotFoundError, ModeVersionNotFoundError
 
 _EXCEPTION_MAPPING: Mapping[type[BaseException], tuple[ErrorCode, int]] = {
     CompositionNotImplementedError: (ErrorCode.NOT_IMPLEMENTED, HTTPStatus.BAD_REQUEST),
+    ModeVersionNotFoundError: (ErrorCode.MODE_VERSION_NOT_FOUND, HTTPStatus.NOT_FOUND),
     ModeNotFoundError: (ErrorCode.MODE_NOT_FOUND, HTTPStatus.NOT_FOUND),
     BackendUnavailableError: (
         ErrorCode.BACKEND_UNAVAILABLE,
