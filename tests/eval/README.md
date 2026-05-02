@@ -1,6 +1,6 @@
 # transduce eval corpora — v0.1
 
-These corpora seed the public `transduce-faithfulness` benchmark scheduled to land at v1.0 (P4-BENCH-01) and the security-suite injection corpus referenced from `SECURITY.md`. They are intentionally small in v0.1; the v1.0 expansion (1500 pairs across 8 categories) is a Phase 4 deliverable.
+These corpora seed the public `transduce-faithfulness` benchmark scheduled to land at v1.0 (P4-BENCH-01) and the security-suite injection corpus referenced from `SECURITY.md`. They are intentionally small in v0.1; the v1.0 expansion (1500 pairs across 8 categories) is a v1.5 deliverable (P4-BENCH-01).
 
 ## Files
 
@@ -37,4 +37,4 @@ The generator reads existing `tests/fixtures/` corpora for negation, entity, and
 
 ## Acceptance gates
 
-The structural shape is enforced in `tests/eval/test_corpus_shape.py` (run with the unit-test suite). The full per-mode AUROC and injection detection-rate gates run under `@pytest.mark.eval` and require model weights; they are excluded from the default `pytest` run and ship in the Phase 4 evaluation harness.
+The structural shape is enforced in `tests/eval/test_corpus_shape.py` (run with the unit-test suite). The full per-mode AUROC and injection detection-rate gates run under `@pytest.mark.eval` and require model weights; they are excluded from the default `pytest` run and ship in the v1.5 evaluation harness (P4-BENCH-01, P4-BENCH-02).
