@@ -1,9 +1,10 @@
 """Mode specification models per docs/system-design.md §Mode Registry.
 
-The v0 subset captures the surface required by Phase 1 deliverables P1-REG-02
-and is consumed by the API schemas, registry loader, pipeline orchestrator,
-and verification pipeline. Phase 2 extends ``VerifierProfile`` with NLI and
-HHEM thresholds; Phase 3 widens ``supported_languages`` semantics.
+The v0 subset captures the surface required by P1-REG-02 and is consumed
+by the API schemas, registry loader, pipeline orchestrator, and
+verification pipeline. The v0.5 release extends ``VerifierProfile`` with
+NLI and HHEM thresholds (P2-VER-07); v1 widens ``supported_languages``
+semantics (P3-LANG-02..P3-LANG-04).
 """
 
 from __future__ import annotations

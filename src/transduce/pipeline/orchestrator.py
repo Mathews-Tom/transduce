@@ -34,7 +34,7 @@ from transduce.verification.pipeline import PipelineOutcome, VerifierPipeline
 
 
 class CompositionNotImplementedError(RuntimeError):
-    """Compose chains arrive in Phase 3 (P3-COMP-01)."""
+    """Compose chains arrive with v1 (P3-COMP-01)."""
 
 
 @dataclass(frozen=True)

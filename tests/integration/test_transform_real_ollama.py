@@ -5,8 +5,8 @@ inference can still run ``pytest -m integration``. CI gates this suite
 behind the ``OLLAMA_HOST`` environment variable; local runs default to
 ``http://localhost:11434``.
 
-Per dev-plan §Phase 1 Tests, these scenarios cover the v0 happy paths,
-retry semantics, and health-check transitions.
+Per dev-plan §v0 Tests, these scenarios cover the v0 happy paths, retry
+semantics, and health-check transitions.
 """
 
 from __future__ import annotations

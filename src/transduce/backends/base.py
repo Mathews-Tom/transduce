@@ -1,10 +1,10 @@
 """Backend adapter protocol per docs/system-design.md §Backend Adapter Layer.
 
 The v0 surface is the ``Backend`` Protocol with ``generate`` and ``health``
-methods. The Phase 3 expansion (Anthropic, vLLM, llama.cpp,
-OpenAI-compat, LiteLLM router) shares the same surface, so wiring v0
-against the protocol now means later phases plug in without refactoring
-the pipeline orchestrator.
+methods. The v1 expansion (Anthropic, vLLM, llama.cpp, OpenAI-compat,
+LiteLLM router — P3-BACK-01..P3-BACK-05) shares the same surface, so
+wiring v0 against the protocol now means later releases plug in without
+refactoring the pipeline orchestrator.
 """
 
 from __future__ import annotations

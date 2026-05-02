@@ -3,8 +3,8 @@
 Each mode declares its own prompt template, intensity range, preservation
 defaults, backend size floor, and verifier profile. The dev plan freezes
 this set at three: ``dejargon`` (jargon reduction), ``register.casual``
-(register shift), and ``length.normalize`` (length cap). Phase 3 adds five
-additional modes; ``humanize.*`` is intentionally absent per
+(register shift), and ``length.normalize`` (length cap). The v1 release
+adds five more (P3-MOD-01); ``humanize.*`` is intentionally absent per
 ``docs/overview.md`` Possible-Moat §3.
 """
 

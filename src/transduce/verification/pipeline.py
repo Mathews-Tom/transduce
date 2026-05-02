@@ -4,8 +4,8 @@ Runs an ordered list of scorers and returns either the first failing
 scorer's result (with all preceding accepts attached for diagnostics) or
 an aggregate accept once every scorer passes. Order matters: cosine acts
 as the coarse pre-filter, preservation scorers run after to catch fine-
-grained drift, and Phase 2's NLI/HHEM scorers slot in between per
-docs/system-design.md §Verification Subsystem.
+grained drift, and the v0.5 NLI/HHEM scorers slot in between (P2-VER-02,
+P2-VER-03) per docs/system-design.md §Verification Subsystem.
 """
 
 from __future__ import annotations
