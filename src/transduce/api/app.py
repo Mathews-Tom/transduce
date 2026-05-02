@@ -1,0 +1,123 @@
+"""Litestar application factory for transduce v0 (P1-API-01..04)."""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from litestar import Litestar, Request
+from litestar.exceptions import ClientException, ValidationException
+
+from transduce.api.errors import (
+    client_exception_handler,
+    domain_exception_handler,
+    validation_exception_handler,
+)
+from transduce.api.handlers import (
+    get_mode,
+    healthz,
+    list_backends,
+    list_modes,
+    list_scorers,
+    metrics,
+    post_transform,
+    readyz,
+)
+from transduce.api.state import TransduceMetrics, TransduceState
+from transduce.backends.base import Backend
+from transduce.backends.ollama import OllamaBackend
+from transduce.config.schema import Config
+from transduce.pipeline.orchestrator import Orchestrator
+from transduce.registry.static import StaticRegistry, build_default_registry
+from transduce.verification.base import Scorer
+from transduce.verification.pipeline import VerifierPipeline
+
+
+def attach_request_id(request: Request[Any, Any, Any]) -> None:
+    """Stamp every inbound request with a server-side ``request_id``.
+
+    Honours an inbound ``X-Request-ID`` header so upstream tracing IDs
+    survive the round-trip; otherwise mints a fresh UUID hex string.
+    """
+    incoming = request.headers.get("x-request-id")
+    request.state.request_id = incoming or uuid.uuid4().hex
+
+
+def create_app(
+    config: Config,
+    *,
+    backend: Backend | None = None,
+    registry: StaticRegistry | None = None,
+    scorers: list[Scorer] | None = None,
+    metrics_state: TransduceMetrics | None = None,
+) -> Litestar:
+    """Build a Litestar app wired against ``config`` and optional overrides.
+
+    Tests inject ``backend``, ``registry``, and ``scorers`` to avoid hitting
+    fastembed and spaCy; production wiring synthesises the real
+    implementations from config (commit follow-ups: see CLI ``serve``).
+    """
+    if scorers is None:
+        raise ValueError("scorers must be supplied; production wiring builds them from config")
+
+    resolved_registry = registry or build_default_registry()
+    resolved_backend = backend or _build_default_backend(config)
+    verifier = VerifierPipeline(scorers)
+    orchestrator = Orchestrator(
+        registry=resolved_registry,
+        backend=resolved_backend,
+        verifier=verifier,
+        default_max_retries=config.verification.max_retries,
+    )
+
+    app_state = TransduceState(
+        config=config,
+        registry=resolved_registry,
+        backend=resolved_backend,
+        verifier=verifier,
+        orchestrator=orchestrator,
+        metrics=metrics_state or TransduceMetrics.build(),
+    )
+
+    async def shutdown(app_instance: Litestar) -> None:
+        aclose = getattr(app_instance.state.transduce_state.backend, "aclose", None)
+        if callable(aclose):
+            await aclose()
+
+    litestar_app = Litestar(
+        route_handlers=[
+            post_transform,
+            list_modes,
+            get_mode,
+            list_backends,
+            list_scorers,
+            healthz,
+            readyz,
+            metrics,
+        ],
+        before_request=attach_request_id,
+        exception_handlers={
+            ValidationException: validation_exception_handler,
+            ClientException: client_exception_handler,
+            Exception: domain_exception_handler,
+        },
+        on_shutdown=[shutdown],
+        debug=False,
+    )
+    litestar_app.state.transduce_state = app_state
+    return litestar_app
+
+
+def _build_default_backend(config: Config) -> Backend:
+    """Build the default Ollama backend from ``config.backends`` selection."""
+    default_id = config.backends.default
+    for entry in config.backends.registry:
+        if entry.id == default_id:
+            return OllamaBackend(
+                endpoint=entry.endpoint,
+                model=entry.model,
+            )
+    raise RuntimeError(f"backends.default {default_id!r} missing from registry at app build time")
+
+
+__all__ = ["attach_request_id", "create_app"]
