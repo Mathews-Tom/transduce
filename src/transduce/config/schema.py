@@ -1,8 +1,9 @@
 """Pydantic schema for the v0 service configuration.
 
-Mirrors the v0 subset of docs/system-design.md §Configuration. Phase 2
-will extend ``modes`` (allowlist + sha256), Phase 3 will extend
-``observability`` (OTel GenAI SemConv) and ``language`` (fasttext).
+Mirrors the v0 subset of docs/system-design.md §Configuration. The v0.5
+release extends ``modes`` (allowlist + sha256, P2-PLG-01..P2-PLG-06) and
+v1 extends ``observability`` (OTel GenAI SemConv, P3-OBS-01..P3-OBS-05)
+plus ``language.detector`` (fasttext, P3-LANG-01).
 
 Each section sets ``extra="forbid"`` so typos surface as validation
 errors at startup rather than silently degrading behaviour.
@@ -72,7 +73,7 @@ class VerificationConfig(BaseModel):
 
 
 class LanguageConfig(BaseModel):
-    """Language defaults. Phase 3 introduces ``detector`` selection."""
+    """Language defaults. The v1 release introduces ``detector`` selection (P3-LANG-01)."""
 
     model_config = ConfigDict(extra="forbid")
 

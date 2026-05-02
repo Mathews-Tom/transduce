@@ -2,8 +2,9 @@
 
 Mirrors docs/system-design.md §Data Models. The v0 subset omits compose
 chains, streaming-strict mode, language detection, cost-budget overrides,
-and ensemble-verifier scores; Phase 2 extends ``VerificationScores`` with
-NLI/HHEM/negation outputs and Phase 3 introduces multi-mode dispatch.
+and ensemble-verifier scores; the v0.5 release widens ``VerificationScores``
+with NLI/HHEM/negation outputs (P2-VER-01..P2-VER-09) and v1 adds multi-mode
+dispatch (P3-COMP-01).
 """
 
 from __future__ import annotations
@@ -17,7 +18,12 @@ from transduce.registry.spec import PreserveRule
 
 
 class ErrorCode(StrEnum):
-    """Stable error codes returned in the ``TransformError`` envelope."""
+    """Stable error codes returned in the ``TransformError`` envelope.
+
+    The v0 subset; later releases add ``input_injection_detected``
+    (P2-INJ-03), ``language_not_supported`` (P3-LANG-03),
+    ``budget_exceeded`` (P3-BUDG-04), and others.
+    """
 
     MODE_NOT_FOUND = "mode_not_found"
     BACKEND_UNAVAILABLE = "backend_unavailable"
@@ -30,7 +36,7 @@ class ErrorCode(StrEnum):
 
 
 class StreamingMode(StrEnum):
-    """Streaming options. Phase 3 adds ``advisory``; ``strict`` aliases ``off``."""
+    """Streaming options. ``advisory`` lands with v1 (P3-STR-01); ``strict`` aliases ``off``."""
 
     OFF = "off"
 
@@ -95,7 +101,8 @@ class VerificationScores(BaseModel):
 
     The v0 subset reports cosine and preservation outcomes. ``topical_similarity``
     is the client-facing aggregate per docs/system-design.md §Verification Subsystem.
-    Phase 2 widens this with bidirectional NLI, HHEM, and negation-diff fields.
+    The v0.5 release widens this with bidirectional NLI, HHEM, and negation-diff
+    fields (P2-VER-01..P2-VER-09).
     """
 
     model_config = ConfigDict(extra="forbid")

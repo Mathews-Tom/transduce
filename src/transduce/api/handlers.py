@@ -38,7 +38,7 @@ def _mode_to_dict(spec: ModeSpec) -> dict[str, Any]:
 
     The prompt template is excluded — exposing it via ``GET /v1/modes`` would
     leak the v0 prompts. Mode introspection with the rendered prompt is the
-    Phase 4 ``POST /v1/modes/{id}/render`` surface.
+    later ``POST /v1/modes/{id}/render`` surface (P4-INTRO-01).
     """
     return spec.model_dump(mode="json", exclude=_MODE_RESPONSE_EXCLUDE)
 

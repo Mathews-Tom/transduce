@@ -1,9 +1,9 @@
 """Static mode registry (P1-REG-01).
 
 Loads the in-tree :func:`seed_modes` and exposes ``resolve``/``list_modes``
-without any plugin discovery. Phase 2 swaps this for an allowlist loader
-with sha256 pinning; the call sites in the API and pipeline depend on
-the same surface either way.
+without any plugin discovery. The v0.5 release swaps this for an
+allowlist loader with sha256 pinning (P2-PLG-01..P2-PLG-04); the call
+sites in the API and pipeline depend on the same surface either way.
 """
 
 from __future__ import annotations

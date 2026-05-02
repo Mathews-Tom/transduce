@@ -2,8 +2,9 @@
 
 The ``Scorer`` Protocol is justified at v0 by three concrete implementations
 (``EntityPreservationScorer``, ``NumberPreservationScorer``,
-``UrlPreservationScorer``) plus the cosine scorer landing in the same phase.
-Phase 2 widens the protocol surface with bidirectional NLI and HHEM scorers.
+``UrlPreservationScorer``) plus the cosine scorer landing in the same
+release. The v0.5 release widens the protocol surface with bidirectional
+NLI and HHEM scorers (P2-VER-02, P2-VER-03).
 """
 
 from __future__ import annotations
