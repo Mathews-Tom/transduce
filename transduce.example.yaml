@@ -20,7 +20,7 @@ backends:
     - id: ollama_qwen
       provider: ollama
       endpoint: ${TRANSDUCE_OLLAMA_ENDPOINT:-http://localhost:11434}
-      model: qwen2.5:14b
+      model: gemma4
       concurrency_limit: 1               # ollama serializes per model
 
 verification:
