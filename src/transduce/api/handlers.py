@@ -16,6 +16,7 @@ from transduce.api.schemas import (
     TransformResponse,
 )
 from transduce.api.state import TransduceState
+from transduce.injection.scanner import InputInjectionDetectedError
 from transduce.registry.spec import ModeSpec, PreserveRule
 
 
@@ -50,6 +51,11 @@ async def post_transform(
     state = _state(request)
     request_id = data.request_id or request_id_for(request)
     max_retries = data.verification.max_retries if data.verification else None
+
+    injection_match = state.injection_scanner.scan(data.text)
+    if injection_match is not None:
+        state.metrics.injection_detected_total.labels(category=injection_match.category).inc()
+        raise InputInjectionDetectedError(injection_match)
 
     try:
         result = await state.orchestrator.transform(

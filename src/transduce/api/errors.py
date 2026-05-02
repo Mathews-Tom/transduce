@@ -21,6 +21,7 @@ from transduce.backends.base import (
     GenerationFailedError,
     GenerationTimeoutError,
 )
+from transduce.injection.scanner import InputInjectionDetectedError
 from transduce.pipeline.orchestrator import (
     CompositionNotImplementedError,
     VerificationFailedError,
@@ -90,6 +91,21 @@ def domain_exception_handler(
             last_candidate=exc.last_candidate,
             scores=exc.scores,
             details=({"failed_scorer": exc.rejection_reason} if exc.rejection_reason else None),
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
+    if isinstance(exc, InputInjectionDetectedError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.INPUT_INJECTION_DETECTED,
+            message=str(exc),
+            details={
+                "matched_pattern": exc.match.pattern,
+                "category": exc.match.category,
+                "span": exc.match.span,
+            },
         )
         return Response(
             envelope.model_dump(mode="json"),

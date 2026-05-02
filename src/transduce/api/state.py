@@ -8,6 +8,7 @@ from prometheus_client import CollectorRegistry, Counter, Histogram
 
 from transduce.backends.base import Backend
 from transduce.config.schema import Config
+from transduce.injection.scanner import InjectionScanner
 from transduce.pipeline.orchestrator import Orchestrator
 from transduce.registry.static import StaticRegistry
 from transduce.verification.pipeline import VerifierPipeline
@@ -23,6 +24,7 @@ class TransduceState:
     verifier: VerifierPipeline
     orchestrator: Orchestrator
     metrics: TransduceMetrics
+    injection_scanner: InjectionScanner
 
 
 @dataclass
@@ -33,6 +35,7 @@ class TransduceMetrics:
     requests_total: Counter
     generation_duration_ms: Histogram
     verification_failures_total: Counter
+    injection_detected_total: Counter
 
     @classmethod
     def build(cls) -> TransduceMetrics:
@@ -55,6 +58,12 @@ class TransduceMetrics:
                 "transduce_verification_failures_total",
                 "Verification rejections grouped by mode and failed scorer.",
                 labelnames=("mode", "scorer"),
+                registry=registry,
+            ),
+            injection_detected_total=Counter(
+                "transduce_injection_detected_total",
+                "Ingress injection scanner matches grouped by category.",
+                labelnames=("category",),
                 registry=registry,
             ),
         )

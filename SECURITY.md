@@ -11,6 +11,15 @@ transduce is a backend service that accepts arbitrary text from clients and forw
 
 transduce is **not a safety boundary against adversarial input authors.** The Spotlighting fence and ingress scanner are defense-in-depth layers. Operators serving untrusted input must add their own controls.
 
+### What Spotlighting and the ingress scanner do, and what they do not
+
+| Layer | Does | Does not |
+|---|---|---|
+| Spotlighting fence (per-request 16-byte nonce wrapping user input inside `<<<USER_TEXT_*>>>` / `<<<END_*>>>` sentinels) | Tells the model which characters are user-supplied and instructs the prompt template to refuse instructions inside the fence. Reduces success rates against well-described attack categories. | Prevent a sufficiently-trained adversary from crafting input that the model still treats as instructions. Provide cryptographic isolation. |
+| Ingress regex scanner | Catches well-known patterns (role-flip, "ignore previous instructions," system-prompt-leak phrasings, fence-breakout markers, exfiltration verbs). Returns `INPUT_INJECTION_DETECTED` (HTTP 422) before the prompt is rendered. | Catch novel paraphrases that do not match the documented patterns. Replace a model-side or downstream injection-aware judge. |
+
+Hostile input authors that need a guarantee should not deploy transduce as the only line of defense. Operators serving untrusted input should layer at least one of: (a) an authoritative model judge invoked after generation, (b) a sandboxed downstream surface that cannot act on the model's output, or (c) a stricter pattern set tuned to the deployment's threat model.
+
 ## Supported versions
 
 | Version | Status |
