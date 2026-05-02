@@ -12,6 +12,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from transduce.api.errors import request_id_for
 from transduce.api.schemas import (
     BackendInfo,
+    ModeRef,
     TransformRequest,
     TransformResponse,
 )
@@ -60,8 +61,9 @@ async def post_transform(
         raise InputInjectionDetectedError(injection_match)
 
     detected_language = state.language_detector.detect(data.text)
-    if isinstance(data.mode, str):
-        mode_spec = state.registry.resolve(data.mode)
+    mode_ids = [data.mode] if isinstance(data.mode, str) else list(data.mode)
+    for mode_ref in mode_ids:
+        mode_spec = state.registry.resolve(mode_ref)
         if detected_language not in mode_spec.supported_languages:
             state.metrics.language_unsupported_total.labels(
                 mode=mode_spec.id, lang=detected_language
@@ -90,18 +92,26 @@ async def post_transform(
         state.metrics.requests_total.labels(mode=_mode_label(data.mode), verdict="error").inc()
         raise
 
-    state.metrics.requests_total.labels(mode=result.mode.id, verdict="accept").inc()
+    response_mode: ModeRef | list[ModeRef]
+    if isinstance(result.mode, tuple):
+        response_mode = list(result.mode)
+        metric_mode_label = "+".join(ref.id for ref in result.mode)
+    else:
+        response_mode = result.mode
+        metric_mode_label = result.mode.id
+
+    state.metrics.requests_total.labels(mode=metric_mode_label, verdict="accept").inc()
     state.metrics.generation_duration_ms.labels(
-        backend=result.backend_used.provider, mode=result.mode.id
+        backend=result.backend_used.provider, mode=metric_mode_label
     ).observe(result.timing.generate_ms)
     if result.cost.usd_total > 0.0:
         state.metrics.generation_cost_usd_total.labels(
-            backend=result.backend_used.provider, mode=result.mode.id
+            backend=result.backend_used.provider, mode=metric_mode_label
         ).inc(result.cost.usd_total)
 
     return TransformResponse(
         request_id=request_id,
-        mode=result.mode,
+        mode=response_mode,
         language=result.language,
         original=result.original,
         transformed=result.transformed,
@@ -111,6 +121,7 @@ async def post_transform(
         timing=result.timing,
         retries=result.retries,
         cost=result.cost,
+        composite_score=result.composite_score,
     )
 
 

@@ -32,6 +32,7 @@ from transduce.language.detector import LanguageDetector
 from transduce.pipeline.orchestrator import Orchestrator
 from transduce.registry.static import StaticRegistry, build_default_registry
 from transduce.verification.base import Scorer
+from transduce.verification.composite import CompositeVerifier
 from transduce.verification.pipeline import VerifierPipeline
 
 
@@ -51,16 +52,22 @@ def create_app(
     backend: Backend | None = None,
     registry: StaticRegistry | None = None,
     scorers: list[Scorer] | None = None,
+    composite_verifier: CompositeVerifier | None = None,
     metrics_state: TransduceMetrics | None = None,
     injection_scanner: InjectionScanner | None = None,
     language_detector: LanguageDetector | None = None,
 ) -> Litestar:
     """Build a Litestar app wired against ``config`` and optional overrides.
 
-    Tests inject ``backend``, ``registry``, ``scorers``, and
-    ``language_detector`` to avoid hitting fastembed, spaCy, and lingua;
-    production wiring synthesises the real implementations from config
-    (commit follow-ups: see CLI ``serve``).
+    Tests inject ``backend``, ``registry``, ``scorers``,
+    ``composite_verifier``, and ``language_detector`` to avoid hitting
+    fastembed, spaCy, and lingua; production wiring synthesises the real
+    implementations from config (commit follow-ups: see CLI ``serve``).
+
+    The default composite verifier reuses ``scorers`` with a threshold
+    of ``cosine_min - 0.05`` per docs/system-design.md §Composite
+    Verifier; operators can pass an explicit ``composite_verifier`` for
+    a custom scorer set or threshold.
     """
     if scorers is None:
         raise ValueError("scorers must be supplied; production wiring builds them from config")
@@ -68,11 +75,16 @@ def create_app(
     resolved_registry = registry or build_default_registry()
     resolved_backend = backend or _build_default_backend(config)
     verifier = VerifierPipeline(scorers)
+    resolved_composite = composite_verifier or CompositeVerifier(
+        scorers=scorers,
+        threshold=max(0.0, config.verification.default_cosine_min - 0.05),
+    )
     orchestrator = Orchestrator(
         registry=resolved_registry,
         backend=resolved_backend,
         verifier=verifier,
         budget_config=config.budget,
+        composite_verifier=resolved_composite,
         default_max_retries=config.verification.max_retries,
     )
     resolved_detector = language_detector or LanguageDetector(

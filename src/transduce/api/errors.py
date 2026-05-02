@@ -30,6 +30,7 @@ from transduce.pipeline.orchestrator import (
     VerificationFailedError,
 )
 from transduce.registry.static import ModeNotFoundError, ModeVersionNotFoundError
+from transduce.verification.composite import CompositeVerificationFailedError
 
 _EXCEPTION_MAPPING: Mapping[type[BaseException], tuple[ErrorCode, int]] = {
     CompositionNotImplementedError: (ErrorCode.NOT_IMPLEMENTED, HTTPStatus.BAD_REQUEST),
@@ -95,6 +96,23 @@ def domain_exception_handler(
             last_candidate=exc.last_candidate,
             scores=exc.scores,
             details=({"failed_scorer": exc.rejection_reason} if exc.rejection_reason else None),
+        )
+        return Response(
+            envelope.model_dump(mode="json"),
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
+    if isinstance(exc, CompositeVerificationFailedError):
+        envelope = TransformError(
+            request_id=request_id_for(request),
+            error=ErrorCode.COMPOSITE_VERIFICATION_FAILED,
+            message=str(exc),
+            last_candidate=exc.last_candidate,
+            details={
+                "which_stage": exc.which_stage,
+                "failed_scorer": exc.outcome.failed_scorer,
+                "aggregate_score": exc.outcome.aggregate_score,
+                "rejection_reason": exc.outcome.rejection_reason,
+            },
         )
         return Response(
             envelope.model_dump(mode="json"),

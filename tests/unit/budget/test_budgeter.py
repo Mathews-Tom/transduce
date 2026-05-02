@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from transduce.budget.budgeter import (
-    BudgetExceededError,
     Budgeter,
+    BudgetExceededError,
 )
 
 pytestmark = pytest.mark.unit

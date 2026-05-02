@@ -181,12 +181,18 @@ class CostBreakdown(BaseModel):
 
 
 class TransformResponse(BaseModel):
-    """Successful transformation response per docs/system-design.md §Data Models."""
+    """Successful transformation response per docs/system-design.md §Data Models.
+
+    ``mode`` is a single :class:`ModeRef` for single-mode requests and a
+    list of :class:`ModeRef` for compose chains (P3-COMP-01).
+    ``composite_score`` is populated only when the composite verifier
+    ran across a chain (P3-COMP-02).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     request_id: str = Field(min_length=1)
-    mode: ModeRef
+    mode: ModeRef | list[ModeRef]
     language: str = Field(min_length=1)
     original: str
     transformed: str
@@ -196,6 +202,7 @@ class TransformResponse(BaseModel):
     timing: TimingBreakdown
     retries: int = Field(ge=0)
     cost: CostBreakdown
+    composite_score: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class TransformError(BaseModel):

@@ -19,9 +19,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from lingua import IsoCode639_1, Language
+from lingua import IsoCode639_1, Language, LanguageDetectorBuilder
 from lingua import LanguageDetector as _LinguaDetector
-from lingua import LanguageDetectorBuilder
 
 
 class LanguageDetectionError(RuntimeError):

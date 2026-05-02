@@ -165,15 +165,35 @@ def test_post_transform_unknown_version_returns_404_mode_version_not_found() -> 
     assert response.json()["error"] == "mode_version_not_found"
 
 
-def test_post_transform_compose_chain_returns_400_not_implemented() -> None:
-    with _client(_app()) as client:
+def test_post_transform_compose_chain_returns_200_with_composite_score() -> None:
+    backend = StubBackend(
+        queue=[
+            GenerationResult(text="stage one out", tokens_in=2, tokens_out=3),
+            GenerationResult(text="stage two out", tokens_in=2, tokens_out=3),
+        ]
+    )
+    app = _app(
+        backend=backend,
+        # Two scorers per stage call: stage one + stage two + composite call.
+        scorer_queues=[["accept", "accept", "accept"]],
+    )
+
+    with _client(app) as client:
         response = client.post(
             "/v1/transform",
-            json={"text": "hi", "mode": ["dejargon", "register.casual"]},
+            json={
+                "text": "hi",
+                "mode": ["dejargon", "register.casual"],
+                "intensity": 0.5,
+            },
         )
 
-    assert response.status_code == 400
-    assert response.json()["error"] == "not_implemented"
+    assert response.status_code == 201
+    body = response.json()
+    assert isinstance(body["mode"], list)
+    assert [m["id"] for m in body["mode"]] == ["dejargon", "register.casual"]
+    assert body["composite_score"] is not None
+    assert body["transformed"] == "stage two out"
 
 
 # ---------------------------------------------------------------------------
