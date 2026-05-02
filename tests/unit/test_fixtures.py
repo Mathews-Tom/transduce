@@ -104,7 +104,7 @@ def test_date_pairs_corpus_covers_dropped_changed_and_preserved(
 
 
 @pytest.mark.unit
-def test_total_corpus_pair_count_meets_phase0_target(
+def test_total_corpus_pair_count_meets_foundation_target(
     text_pairs: list[dict[str, Any]],
     negation_pairs: list[dict[str, Any]],
     entity_pairs: list[dict[str, Any]],
@@ -112,7 +112,7 @@ def test_total_corpus_pair_count_meets_phase0_target(
     url_pairs: list[dict[str, Any]],
     date_pairs: list[dict[str, Any]],
 ) -> None:
-    """Dev plan F-05: 200+ labeled pairs across 6 categories."""
+    """Dev plan F-05: 200+ labeled pairs across six categories."""
     total = (
         len(text_pairs)
         + len(negation_pairs)

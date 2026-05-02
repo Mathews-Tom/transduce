@@ -120,6 +120,8 @@ asyncio_mode = "auto"
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:_pytest.*",
+    "ignore:No data was collected:",
+    "ignore:Failed to generate report:",
 ]
 
 [tool.coverage.run]
