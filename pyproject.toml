@@ -28,6 +28,7 @@ dependencies = [
     "diff-match-patch>=20241021",
     "pydantic>=2.10,<3",
     "pyyaml>=6.0,<7",
+    "spacy>=3.7,<4",
 ]
 
 [project.urls]
