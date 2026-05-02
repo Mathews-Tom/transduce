@@ -112,14 +112,24 @@ def create_app(
 
 
 def _build_default_backend(config: Config) -> Backend:
-    """Build the default Ollama backend from ``config.backends`` selection."""
+    """Build the default Ollama backend from ``config.backends`` selection.
+
+    Phase-3 widens ``BackendEntry`` with cloud providers and optional
+    endpoints; the v1 backend dispatch table replaces this helper. Until
+    then the wiring narrows ``endpoint`` for the ollama path the
+    validator already guarantees, and rejects anything else loudly.
+    """
     default_id = config.backends.default
     for entry in config.backends.registry:
-        if entry.id == default_id:
-            return OllamaBackend(
-                endpoint=entry.endpoint,
-                model=entry.model,
+        if entry.id != default_id:
+            continue
+        if entry.provider != "ollama":
+            raise RuntimeError(
+                f"backend {entry.id!r}: provider {entry.provider!r} not yet wired in app factory"
             )
+        if entry.endpoint is None:  # pragma: no cover — validator enforces this for ollama
+            raise RuntimeError(f"backend {entry.id!r}: ollama provider requires an endpoint")
+        return OllamaBackend(endpoint=entry.endpoint, model=entry.model)
     raise RuntimeError(f"backends.default {default_id!r} missing from registry at app build time")
 
 

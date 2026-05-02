@@ -1,10 +1,9 @@
-# transduce reference configuration (v0.5).
+# transduce reference configuration (v1).
 #
-# Mirrors the v0.5 subset of docs/system-design.md §Configuration. Copy to
-# transduce.yaml and replace placeholder values. Fields are validated by
-# Pydantic at service startup; missing required keys fail fast with an
-# actionable error. v1 introduces ``observability`` (OTel) and
-# ``language.detector`` (fasttext-langid).
+# Mirrors docs/system-design.md §Configuration. Copy to transduce.yaml
+# and replace placeholder values. Fields are validated by Pydantic at
+# service startup; missing required keys fail fast with an actionable
+# error.
 
 service:
   host: 0.0.0.0
@@ -14,22 +13,50 @@ service:
   max_retries_default: 3
 
 # Mode allowlist — sha256-pinned packages, no auto-discovery (P2-PLG-01..P2-PLG-03).
-# Operators add a package by reviewing the manifest, computing its sha256
-# (see docs/migration-v0-to-v0.5.md), and listing it below. Auto-discovery
-# is opt-in via ``source: auto`` and emits a startup warning.
+# Multiple entries with the same ``name`` but different ``version`` enable
+# multi-version dispatch (P3-VER-01..02); clients pin a specific version via
+# ``mode: "id@1.2.0"``.
 modes:
   source: allowlist
   enforce_signing: false                  # v2 flips this default; ADR-0004
   packages: []                            # populate with name, version, sha256, path
 
+# Backends — local (ollama, vllm, llama_cpp, openai_compat) require an
+# endpoint; cloud providers (anthropic, litellm) require api_key_env so
+# secrets stay out of config. ``cost_in_per_million_usd`` /
+# ``cost_out_per_million_usd`` override the backend's built-in pricing
+# table when present (P3-BACK-07).
 backends:
   default: ollama_qwen
   registry:
     - id: ollama_qwen
       provider: ollama
       endpoint: ${TRANSDUCE_OLLAMA_ENDPOINT:-http://localhost:11434}
-      model: gemma4
+      model: qwen2.5:14b
       concurrency_limit: 1               # ollama serializes per model
+    - id: anthropic_haiku
+      provider: anthropic
+      model: claude-haiku-4-5
+      api_key_env: ANTHROPIC_API_KEY
+      concurrency_limit: 16
+      prompt_alias: claude
+    - id: vllm_qwen
+      provider: vllm
+      endpoint: ${TRANSDUCE_VLLM_ENDPOINT:-http://localhost:8000/v1}
+      model: Qwen/Qwen2.5-14B-Instruct
+      concurrency_limit: 32              # vllm batches; raise the floor
+      prompt_alias: qwen2_5
+    - id: openrouter_haiku
+      provider: openai_compat
+      endpoint: https://openrouter.ai/api/v1
+      model: anthropic/claude-haiku-4.5
+      api_key_env: OPENROUTER_API_KEY
+      concurrency_limit: 8
+    - id: litellm_router
+      provider: litellm
+      model: claude-haiku-4-5
+      api_key_env: ANTHROPIC_API_KEY
+      concurrency_limit: 16
 
 # Verifier ensemble defaults (P2-VER-06..P2-VER-09).
 # Per-mode ``VerifierProfile`` overrides take precedence per docs/system-design.md
@@ -45,5 +72,31 @@ verification:
   injection_scanner: regex-pack-v0.5     # the v0.5 regex pack ships in core
   max_retries: 3
 
+# Per-request cost guard (P3-BUDG-01..02). The cap is enforced as
+# cumulative across retries; retries that would exceed it raise
+# BUDGET_EXCEEDED. ``abort_on_non_improving_trend`` short-circuits when
+# verifier scores stagnate over the trailing window.
+budget:
+  max_cost_per_request_usd: 0.05
+  abort_on_non_improving_trend: true
+  non_improving_window: 3
+
+# Language detection (P3-LANG-01..02). Lingua loads the listed languages
+# at startup; keep the set small to bound latency. ``default`` must be
+# present in ``languages``.
 language:
   default: en
+  detector: lingua
+  languages: ["en"]
+  min_confidence: 0.6
+
+# OTel GenAI SemConv configuration slot (P3-OBS-01..05). Span emission
+# lands in a follow-up branch; the slot exists now so operators can
+# declare their posture without a future breaking config change.
+# ``debug_include_text: true`` requires ``redact_text_in_spans: false``;
+# the validator enforces the pairing.
+observability:
+  enabled: false
+  semconv: gen_ai
+  redact_text_in_spans: true
+  debug_include_text: false

@@ -152,18 +152,184 @@ def test_config_non_mapping_top_level_raises(tmp_path: Path) -> None:
 def test_config_unknown_provider_in_registry_rejected(tmp_path: Path) -> None:
     body = """
     backends:
-      default: anthropic_haiku
+      default: bogus_backend
       registry:
-        - id: anthropic_haiku
-          provider: anthropic
-          endpoint: https://api.anthropic.com
-          model: claude-haiku-4-5
+        - id: bogus_backend
+          provider: huggingface_inference
+          endpoint: https://api.example.test
+          model: some-model
     """.strip()
 
     with pytest.raises(ConfigError) as exc:
         load_config(_write(tmp_path, body))
 
     assert "provider" in str(exc.value)
+
+
+def test_config_anthropic_backend_loads_with_api_key_env(tmp_path: Path) -> None:
+    body = """
+    backends:
+      default: anthropic_haiku
+      registry:
+        - id: anthropic_haiku
+          provider: anthropic
+          model: claude-haiku-4-5
+          api_key_env: ANTHROPIC_API_KEY
+          concurrency_limit: 16
+    """.strip()
+
+    config = load_config(_write(tmp_path, body))
+
+    entry = config.backends.registry[0]
+    assert entry.provider == "anthropic"
+    assert entry.api_key_env == "ANTHROPIC_API_KEY"
+    assert entry.endpoint is None
+    assert entry.concurrency_limit == 16
+
+
+def test_config_anthropic_backend_without_api_key_env_rejected(tmp_path: Path) -> None:
+    body = """
+    backends:
+      default: anthropic_haiku
+      registry:
+        - id: anthropic_haiku
+          provider: anthropic
+          model: claude-haiku-4-5
+    """.strip()
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "api_key_env" in str(exc.value)
+
+
+def test_config_vllm_backend_without_endpoint_rejected(tmp_path: Path) -> None:
+    body = """
+    backends:
+      default: vllm
+      registry:
+        - id: vllm
+          provider: vllm
+          model: Qwen/Qwen2.5-14B-Instruct
+    """.strip()
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "endpoint" in str(exc.value)
+
+
+def test_config_duplicate_backend_id_rejected(tmp_path: Path) -> None:
+    body = """
+    backends:
+      default: ollama_qwen
+      registry:
+        - id: ollama_qwen
+          provider: ollama
+          endpoint: http://localhost:11434
+          model: qwen2.5:14b
+        - id: ollama_qwen
+          provider: ollama
+          endpoint: http://localhost:11435
+          model: qwen2.5:7b
+    """.strip()
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "duplicate backend ids" in str(exc.value)
+
+
+def test_config_budget_defaults_apply(tmp_path: Path) -> None:
+    config = load_config(_write(tmp_path, _MIN_BACKEND))
+
+    assert config.budget.max_cost_per_request_usd == pytest.approx(0.05)
+    assert config.budget.abort_on_non_improving_trend is True
+    assert config.budget.non_improving_window == 3
+
+
+def test_config_budget_window_below_two_rejected(tmp_path: Path) -> None:
+    body = _MIN_BACKEND + "\nbudget:\n  non_improving_window: 1\n"
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "non_improving_window" in str(exc.value)
+
+
+def test_config_language_default_must_be_loaded(tmp_path: Path) -> None:
+    body = _MIN_BACKEND + "\nlanguage:\n  default: de\n  languages: ['en']\n"
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "language.default" in str(exc.value)
+
+
+def test_config_language_loads_multilingual_set(tmp_path: Path) -> None:
+    body = (
+        _MIN_BACKEND + "\nlanguage:\n"
+        "  default: en\n"
+        "  languages: ['en', 'de', 'fr']\n"
+        "  min_confidence: 0.7\n"
+    )
+
+    config = load_config(_write(tmp_path, body))
+
+    assert config.language.languages == ("en", "de", "fr")
+    assert config.language.min_confidence == pytest.approx(0.7)
+
+
+def test_config_observability_debug_text_requires_redaction_off(tmp_path: Path) -> None:
+    body = (
+        _MIN_BACKEND + "\nobservability:\n"
+        "  debug_include_text: true\n"
+        "  redact_text_in_spans: true\n"
+    )
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "debug_include_text" in str(exc.value)
+
+
+def test_config_modes_allows_same_name_different_versions(tmp_path: Path) -> None:
+    body = (
+        _MIN_BACKEND + "\nmodes:\n"
+        "  packages:\n"
+        "    - name: transduce-mode-humanize\n"
+        "      version: '1.0.0'\n"
+        '      sha256: "' + ("a" * 64) + '"\n'
+        "      path: ./packages/humanize-1.0\n"
+        "    - name: transduce-mode-humanize\n"
+        "      version: '2.0.0'\n"
+        '      sha256: "' + ("b" * 64) + '"\n'
+        "      path: ./packages/humanize-2.0\n"
+    )
+
+    config = load_config(_write(tmp_path, body))
+
+    assert {pkg.version for pkg in config.modes.packages} == {"1.0.0", "2.0.0"}
+
+
+def test_config_modes_rejects_identical_name_version_pair(tmp_path: Path) -> None:
+    body = (
+        _MIN_BACKEND + "\nmodes:\n"
+        "  packages:\n"
+        "    - name: transduce-mode-humanize\n"
+        "      version: '1.0.0'\n"
+        '      sha256: "' + ("a" * 64) + '"\n'
+        "      path: ./packages/humanize-1.0\n"
+        "    - name: transduce-mode-humanize\n"
+        "      version: '1.0.0'\n"
+        '      sha256: "' + ("a" * 64) + '"\n'
+        "      path: ./packages/humanize-1.0-dup\n"
+    )
+
+    with pytest.raises(ConfigError) as exc:
+        load_config(_write(tmp_path, body))
+
+    assert "duplicate" in str(exc.value)
 
 
 def test_config_loads_example_yaml_succeeds() -> None:
