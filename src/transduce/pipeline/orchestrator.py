@@ -360,11 +360,44 @@ def _compose_cost(attempts: Sequence[AttemptCost]) -> CostBreakdown:
 
 
 def _failure_context(outcome: PipelineOutcome) -> str:
-    pieces: list[str] = []
-    if outcome.failed_scorer:
-        pieces.append(f"scorer={outcome.failed_scorer}")
-    if outcome.rejection_reason:
-        pieces.append(f"reason={outcome.rejection_reason}")
-    if outcome.span:
-        pieces.append(f"span={outcome.span!r}")
-    return "; ".join(pieces) if pieces else "previous attempt rejected"
+    """Compose a CRITIC-style retry hint naming the failed scorer and span.
+
+    The wording is scorer-specific so the model receives actionable
+    guidance rather than a key-value blob (see Gou et al., ICLR 2024,
+    on external-feedback retry vs intrinsic self-correction). All
+    branches still surface the raw scorer name and span so downstream
+    eval harnesses and tests can grep for them.
+    """
+    scorer = outcome.failed_scorer or "unknown"
+    span = outcome.span
+    reason = outcome.rejection_reason or "unspecified"
+
+    guidance = _SCORER_GUIDANCE.get(scorer, _GENERIC_GUIDANCE)
+    span_clause = f" span={span!r}" if span else ""
+    return (f"scorer={scorer}; reason={reason};{span_clause} guidance: {guidance}").strip()
+
+
+_GENERIC_GUIDANCE: str = (
+    "regenerate the rewrite, addressing the specific failure above; do not change facts."
+)
+
+_SCORER_GUIDANCE: dict[str, str] = {
+    "negation_diff": ("do not add or remove negation cues; preserve the polarity of every claim"),
+    "bidirectional_nli": (
+        "stay strictly faithful to the source; do not introduce details "
+        "absent from the input or drop details present in it"
+    ),
+    "hhem_factuality": (
+        "do not invent qualifiers, attributions, or quantities not present in the source"
+    ),
+    "cosine_similarity": (
+        "stay topically close to the source; the previous rewrite drifted too far"
+    ),
+    "entity_preservation": ("preserve every named entity from the source verbatim"),
+    "number_preservation": (
+        "preserve every number, currency symbol, unit, and decimal place exactly"
+    ),
+    "url_preservation": ("preserve every URL exactly; do not shorten, redirect, or truncate"),
+    "date_preservation": ("preserve every date and temporal marker exactly as written"),
+    "length_delta": ("respect the configured length band; the previous output was outside it"),
+}
