@@ -63,12 +63,22 @@ class BackendsConfig(BaseModel):
 
 
 class VerificationConfig(BaseModel):
-    """Verifier subsystem defaults for the v0 cosine + preservation pipeline."""
+    """Verifier subsystem defaults for the v0.5 ensemble.
+
+    Per-mode ``VerifierProfile`` overrides take precedence; these defaults
+    apply to any mode that does not declare its own threshold.
+    ``injection_scanner`` is the name of the regex pack the operator is
+    running with; v0.5 ships ``regex-pack-v0.5`` in core.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = True
     default_cosine_min: float = Field(default=0.85, ge=0.0, le=1.0)
+    default_nli_min: float = Field(default=0.70, ge=0.0, le=1.0)
+    default_hhem_min: float = Field(default=0.50, ge=0.0, le=1.0)
+    reject_on_negation_diff: bool = True
+    injection_scanner: str = Field(default="regex-pack-v0.5", min_length=1)
     max_retries: int = Field(default=3, ge=0, le=5)
 
 
