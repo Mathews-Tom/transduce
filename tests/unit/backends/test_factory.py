@@ -118,6 +118,32 @@ def test_factory_openai_compat_without_api_key_env_uses_no_auth() -> None:
     assert isinstance(backend, SemaphoreBackend)
 
 
+def test_factory_openai_compat_with_declared_api_key_env_unset_raises() -> None:
+    entry = BackendEntry(
+        id="openrouter",
+        provider="openai_compat",
+        endpoint="https://openrouter.ai/api/v1",
+        model="anthropic/claude-haiku-4.5",
+        api_key_env="OPENROUTER_API_KEY",
+    )
+
+    with pytest.raises(BackendFactoryError, match="OPENROUTER_API_KEY"):
+        build_backend(entry, env={})
+
+
+def test_factory_vllm_with_declared_api_key_env_empty_raises() -> None:
+    entry = BackendEntry(
+        id="vllm_secured",
+        provider="vllm",
+        endpoint="http://localhost:8000/v1",
+        model="Qwen/Qwen2.5-14B-Instruct",
+        api_key_env="VLLM_API_KEY",
+    )
+
+    with pytest.raises(BackendFactoryError, match="VLLM_API_KEY"):
+        build_backend(entry, env={"VLLM_API_KEY": ""})
+
+
 def test_factory_builds_litellm_router_with_api_key_from_env() -> None:
     entry = BackendEntry(
         id="litellm",

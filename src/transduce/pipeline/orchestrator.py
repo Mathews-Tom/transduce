@@ -318,6 +318,26 @@ class Orchestrator:
             else preservation_union(spec.preserve_defaults for spec in specs)
         )
 
+        # The cost cap is per-request, not per-stage: a 3-stage chain at the
+        # default 0.05 USD ceiling must spend at most 0.05 USD across the
+        # whole chain. The shared budgeter also lets the trend abort
+        # accumulate across stages, so a chain that drifts into stagnation in
+        # later stages still aborts.
+        budgeter = Budgeter(
+            max_cost_usd=(
+                max_cost_usd
+                if max_cost_usd is not None
+                else self._budget_config.max_cost_per_request_usd
+            ),
+            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
+            non_improving_window=self._budget_config.non_improving_window,
+        )
+        budget_limit = (
+            max_cost_usd
+            if max_cost_usd is not None
+            else self._budget_config.max_cost_per_request_usd
+        )
+
         current_text = text
         all_attempts: list[AttemptCost] = []
         generate_total_ms = 0
@@ -332,7 +352,8 @@ class Orchestrator:
                 intensity=stage_intensity,
                 preserve=union_preserve,
                 max_retries=max_retries,
-                max_cost_usd=max_cost_usd,
+                budgeter=budgeter,
+                budget_limit=budget_limit,
             )
             current_text = stage_result.transformed
             all_attempts.extend(stage_result.attempts)
@@ -383,29 +404,23 @@ class Orchestrator:
         intensity: float,
         preserve: Sequence[PreserveRule],
         max_retries: int | None,
-        max_cost_usd: float | None,
+        budgeter: Budgeter,
+        budget_limit: float,
     ) -> _StageOutcome:
         """Run the single-mode pipeline for one stage of a compose chain.
 
         Mirrors the single-mode ``transform`` body but returns a stage-
         scoped result instead of an :class:`OrchestratorResult` so the
         compose loop can accumulate per-stage attempts, timings, and
-        retry counts.
+        retry counts. The ``budgeter`` is shared across stages so the
+        per-request cost cap and trend window apply to the whole chain
+        rather than resetting per stage.
         """
         retries_cap = self._default_max_retries if max_retries is None else max_retries
         if retries_cap < 0 or retries_cap > 5:
             raise ValueError("max_retries must be within [0, 5]")
 
         max_tokens = max(self._max_tokens_floor, int(len(input_text) * self._max_tokens_ratio))
-        budgeter = Budgeter(
-            max_cost_usd=(
-                max_cost_usd
-                if max_cost_usd is not None
-                else self._budget_config.max_cost_per_request_usd
-            ),
-            abort_on_non_improving_trend=self._budget_config.abort_on_non_improving_trend,
-            non_improving_window=self._budget_config.non_improving_window,
-        )
 
         attempts: list[AttemptCost] = []
         fence = build_fence(input_text)
@@ -461,11 +476,7 @@ class Orchestrator:
                 raise BudgetExceededError(
                     reason=reason,
                     state=budgeter.state,
-                    limit=(
-                        max_cost_usd
-                        if max_cost_usd is not None
-                        else self._budget_config.max_cost_per_request_usd
-                    ),
+                    limit=budget_limit,
                 )
             if attempt == retries_cap:
                 raise VerificationFailedError(

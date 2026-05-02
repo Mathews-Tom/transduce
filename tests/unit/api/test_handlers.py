@@ -194,6 +194,42 @@ def test_post_transform_min_model_b_unset_with_floor_returns_412() -> None:
     assert response.json()["error"] == "backend_min_model_not_met"
 
 
+def test_post_transform_compose_chain_shares_budget_across_stages() -> None:
+    """Compose chains must enforce the per-request cost cap across the
+    whole chain, not reset per stage. Without the shared budgeter, a
+    3-stage chain at $0.05/request would actually allow $0.15.
+    """
+    backend = StubBackend(
+        queue=[GenerationResult(text=f"out-{i}", tokens_in=2, tokens_out=3) for i in range(8)]
+    )
+    # Per-stage scorer queue: each stage gets fresh "reject" verdicts so
+    # the trend abort fires on stagnation; with a shared budgeter the
+    # trend abort accumulates across stages.
+    app = _app(
+        backend=backend,
+        scorer_queues=[["reject"] * 8],
+    )
+
+    with _client(app) as client:
+        response = client.post(
+            "/v1/transform",
+            json={
+                "text": "hi",
+                "mode": ["dejargon", "register.casual", "tone.us-to-uk"],
+                "intensity": 0.5,
+                "verification": {"max_retries": 5},
+            },
+        )
+
+    assert response.status_code == 402
+    body = response.json()
+    assert body["error"] == "budget_exceeded"
+    # The shared budgeter accumulates attempts across stages; the trend
+    # window of 3 collapses on the third identical reject, so attempts
+    # never reach the per-stage retry cap.
+    assert body["details"]["reason"] == "non_improving_trend"
+
+
 def test_post_transform_compose_chain_returns_200_with_composite_score() -> None:
     backend = StubBackend(
         queue=[

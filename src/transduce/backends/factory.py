@@ -87,7 +87,21 @@ def _build_inner(
             raise BackendFactoryError(
                 f"backend {entry.id!r}: {entry.provider!r} requires an endpoint"
             )
-        optional_api_key: str | None = environ.get(entry.api_key_env) if entry.api_key_env else None
+        if entry.api_key_env:
+            # Operator declared the env var; an unset/empty value is a config
+            # error, not "anonymous auth requested". Silent fallback to None
+            # would ship requests with no Authorization header and fail at
+            # the upstream 401 — exactly the silent-failure pattern the
+            # security policy bans.
+            optional_api_key: str | None = environ.get(entry.api_key_env)
+            if not optional_api_key:
+                raise BackendFactoryError(
+                    f"backend {entry.id!r}: env var {entry.api_key_env!r} is unset; "
+                    "set it in the deployment environment before starting the service "
+                    "or remove api_key_env to opt into anonymous auth"
+                )
+        else:
+            optional_api_key = None
         return OpenAICompatBackend(
             name=entry.provider,
             endpoint=entry.endpoint,
