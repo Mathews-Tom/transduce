@@ -21,6 +21,7 @@ from transduce.api.handlers import (
     list_scorers,
     metrics,
     post_transform,
+    post_transform_stream,
     readyz,
 )
 from transduce.api.state import TransduceMetrics, TransduceState
@@ -120,6 +121,7 @@ def create_app(
     litestar_app = Litestar(
         route_handlers=[
             post_transform,
+            post_transform_stream,
             list_modes,
             get_mode,
             list_backends,

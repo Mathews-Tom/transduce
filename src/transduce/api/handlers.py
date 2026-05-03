@@ -1,18 +1,23 @@
-"""HTTP route handlers for the v0 API surface."""
+"""HTTP route handlers for the v1 API surface."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import json
+from collections.abc import AsyncIterator, Iterable
 from http import HTTPStatus
 from typing import Any
 
 from litestar import Request, Response, get, post
+from litestar.response import ServerSentEvent, ServerSentEventMessage
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from transduce.api.errors import request_id_for
 from transduce.api.schemas import (
     BackendInfo,
+    ErrorCode,
     ModeRef,
+    StreamingMode,
+    TransformError,
     TransformRequest,
     TransformResponse,
 )
@@ -33,6 +38,11 @@ from transduce.observability.attributes import (
     TRANSDUCE_RETRIES,
     TRANSDUCE_SCAN_MATCHED_PATTERN,
     TRANSDUCE_VERDICT,
+)
+from transduce.pipeline.streaming import (
+    StreamChunkEvent,
+    StreamVerdictEvent,
+    stream_transform,
 )
 from transduce.registry.spec import ModeSpec, PreserveRule
 
@@ -162,6 +172,181 @@ async def post_transform(
         )
 
 
+@post("/v1/transform/stream", status_code=HTTPStatus.OK)
+async def post_transform_stream(
+    data: TransformRequest, request: Request[Any, Any, Any]
+) -> ServerSentEvent | Response[dict[str, Any]]:
+    """Advisory streaming transform (P3-STR-01..02).
+
+    Forwards each backend text-delta to the client as it arrives and
+    emits a final ``verdict`` event after the verifier runs once on
+    the accumulated text. Strict streaming returns 400
+    ``not_implemented`` per ``docs/system-design.md``; ``streaming:
+    off`` is rejected at this endpoint to keep the contract honest
+    (the non-streaming endpoint exists for that case).
+    """
+    state = _state(request)
+    request_id = data.request_id or request_id_for(request)
+
+    if data.streaming is StreamingMode.STRICT:
+        return _streaming_error_response(
+            request_id=request_id,
+            code=ErrorCode.NOT_IMPLEMENTED,
+            message=(
+                "strict verification with token streaming is architecturally "
+                "incompatible; use POST /v1/transform for strict verification"
+            ),
+            status=HTTPStatus.BAD_REQUEST,
+        )
+    if data.streaming is not StreamingMode.ADVISORY:
+        return _streaming_error_response(
+            request_id=request_id,
+            code=ErrorCode.VALIDATION_ERROR,
+            message=(
+                "POST /v1/transform/stream requires streaming=advisory; "
+                "use POST /v1/transform for non-streaming requests"
+            ),
+            status=HTTPStatus.BAD_REQUEST,
+        )
+    if isinstance(data.mode, list):
+        return _streaming_error_response(
+            request_id=request_id,
+            code=ErrorCode.NOT_IMPLEMENTED,
+            message="compose chains are not supported on the streaming endpoint",
+            status=HTTPStatus.BAD_REQUEST,
+        )
+    if not state.backend.capabilities.streaming:
+        return _streaming_error_response(
+            request_id=request_id,
+            code=ErrorCode.NOT_IMPLEMENTED,
+            message=(
+                f"backend {state.backend.name!r} does not support streaming; use POST /v1/transform"
+            ),
+            status=HTTPStatus.BAD_REQUEST,
+        )
+
+    injection_match = state.injection_scanner.scan(data.text)
+    if injection_match is not None:
+        state.metrics.injection_detected_total.labels(category=injection_match.category).inc()
+        raise InputInjectionDetectedError(injection_match)
+
+    detected_language = state.language_detector.detect(data.text)
+    mode_id = data.mode if isinstance(data.mode, str) else data.mode[0]
+    mode_spec = state.registry.resolve(mode_id)
+    if detected_language not in mode_spec.supported_languages:
+        state.metrics.language_unsupported_total.labels(
+            mode=mode_spec.id, lang=detected_language
+        ).inc()
+        raise LanguageNotSupportedError(
+            detected=detected_language,
+            supported=mode_spec.supported_languages,
+            mode_id=mode_spec.id,
+        )
+    enforce_min_model_b(
+        mode_id=mode_spec.id,
+        required_b=mode_spec.backend_requirements.min_model_b,
+        backend_id=state.backend_id,
+        backend_model=state.backend.model,
+        declared_b=state.backend_model_size_b,
+    )
+
+    return ServerSentEvent(
+        _streaming_event_messages(
+            request_id=request_id,
+            data=data,
+            spec=mode_spec,
+            state=state,
+            language=detected_language,
+        )
+    )
+
+
+async def _streaming_event_messages(
+    *,
+    request_id: str,
+    data: TransformRequest,
+    spec: ModeSpec,
+    state: TransduceState,
+    language: str,
+) -> AsyncIterator[ServerSentEventMessage]:
+    """Convert :class:`stream_transform` events to SSE messages."""
+    metric_mode_label = spec.id
+    try:
+        async for event in stream_transform(
+            text=data.text,
+            spec=spec,
+            backend=state.backend,
+            verifier=state.verifier,
+            intensity=data.intensity,
+            preserve=_coerce_preserve(data.preserve),
+            span_emitter=state.span_emitter,
+        ):
+            if isinstance(event, StreamChunkEvent):
+                yield ServerSentEventMessage(
+                    data=json.dumps({"text": event.text}),
+                    event="chunk",
+                )
+            elif isinstance(event, StreamVerdictEvent):
+                payload = {
+                    "request_id": request_id,
+                    "mode": event.mode.model_dump(mode="json"),
+                    "language": language,
+                    "verdict": event.verdict,
+                    "transformed": event.transformed,
+                    "rejection_reason": event.rejection_reason,
+                    "diff": list(event.diff),
+                    "scores": event.scores,
+                    "tokens_in": event.tokens_in,
+                    "tokens_out": event.tokens_out,
+                    "timing_ms": event.timing_ms,
+                }
+                yield ServerSentEventMessage(
+                    data=json.dumps(payload),
+                    event="verdict",
+                )
+    except ConcurrencyLimitExceededError as exc:
+        state.metrics.concurrency_rejections_total.labels(backend=exc.backend_id).inc()
+        state.metrics.requests_total.labels(mode=metric_mode_label, verdict="error").inc()
+        yield _stream_error_event(
+            request_id=request_id,
+            code=ErrorCode.CONCURRENCY_LIMIT_EXCEEDED,
+            message=str(exc),
+        )
+        return
+    except Exception as exc:
+        state.metrics.requests_total.labels(mode=metric_mode_label, verdict="error").inc()
+        yield _stream_error_event(
+            request_id=request_id,
+            code=ErrorCode.GENERATION_FAILED,
+            message=str(exc) or "stream_transform failed",
+        )
+        return
+
+    state.metrics.requests_total.labels(mode=metric_mode_label, verdict="accept").inc()
+
+
+def _streaming_error_response(
+    *,
+    request_id: str,
+    code: ErrorCode,
+    message: str,
+    status: HTTPStatus,
+) -> Response[dict[str, Any]]:
+    envelope = TransformError(request_id=request_id, error=code, message=message)
+    return Response(envelope.model_dump(mode="json"), status_code=status)
+
+
+def _stream_error_event(
+    *, request_id: str, code: ErrorCode, message: str
+) -> ServerSentEventMessage:
+    payload = {
+        "request_id": request_id,
+        "error": code.value,
+        "message": message,
+    }
+    return ServerSentEventMessage(data=json.dumps(payload), event="error")
+
+
 @get("/v1/modes")
 async def list_modes(request: Request[Any, Any, Any]) -> dict[str, list[dict[str, Any]]]:
     return {
@@ -231,5 +416,6 @@ __all__ = [
     "list_scorers",
     "metrics",
     "post_transform",
+    "post_transform_stream",
     "readyz",
 ]

@@ -48,9 +48,22 @@ class ErrorCode(StrEnum):
 
 
 class StreamingMode(StrEnum):
-    """Streaming options. ``advisory`` lands with v1 (P3-STR-01); ``strict`` aliases ``off``."""
+    """Streaming options for the v1 transform endpoints (P3-STR-01..02).
+
+    ``off`` is the default for ``POST /v1/transform`` and rejects use
+    of ``POST /v1/transform/stream``. ``advisory`` is the only mode
+    accepted by the streaming endpoint: chunks stream as the backend
+    produces them, the verifier runs once on the accumulated text, and
+    the final SSE event carries the verdict so clients can roll back
+    on rejection. ``strict`` is rejected with 400 ``not_implemented``
+    by the streaming endpoint — strict verification + token streaming
+    are architecturally incompatible per docs/system-design.md
+    §What This Design Deliberately Excludes.
+    """
 
     OFF = "off"
+    ADVISORY = "advisory"
+    STRICT = "strict"
 
 
 class ModeRef(BaseModel):
