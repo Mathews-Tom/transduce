@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 import pytest
 
-from transduce.backends.base import BackendCapabilities, BackendHealth, GenerationResult
+from transduce.backends.base import (
+    BackendCapabilities,
+    BackendHealth,
+    GenerationResult,
+    StreamChunk,
+)
 from transduce.config.schema import BudgetConfig
 from transduce.pipeline.orchestrator import (
     CompositionNotImplementedError,
@@ -66,6 +72,14 @@ class ScriptedBackend:
     ) -> float | None:  # pragma: no cover — orchestrator never calls
         del tokens_in, tokens_out
         return None
+
+    async def stream(  # pragma: no cover — orchestrator path under test is non-streaming
+        self, prompt: str, *, max_tokens: int, temperature: float
+    ) -> AsyncIterator[StreamChunk]:
+        del prompt, max_tokens, temperature
+        if False:  # presence of yield makes this an async generator
+            yield  # pragma: no cover
+        raise NotImplementedError("ScriptedBackend does not implement streaming")
 
 
 @dataclass

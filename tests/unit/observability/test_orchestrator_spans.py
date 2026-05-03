@@ -9,6 +9,8 @@ stub scorer pattern as the existing orchestrator unit tests.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 import pytest
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
@@ -19,6 +21,9 @@ from transduce.backends.base import (
     BackendCapabilities,
     BackendHealth,
     GenerationResult,
+    StreamChunk,
+    StreamFinal,
+    StreamTextDelta,
 )
 from transduce.config.schema import BudgetConfig
 from transduce.observability import SpanEmitter
@@ -69,6 +74,13 @@ class _StubBackend:
     def cost_estimate(self, *, tokens_in: int, tokens_out: int) -> float | None:
         del tokens_in, tokens_out
         return None
+
+    async def stream(
+        self, prompt: str, *, max_tokens: int, temperature: float
+    ) -> AsyncIterator[StreamChunk]:
+        del prompt, max_tokens, temperature
+        yield StreamTextDelta(text=self._response)
+        yield StreamFinal(tokens_in=12, tokens_out=8)
 
 
 class _AcceptScorer(Scorer):

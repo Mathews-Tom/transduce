@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -10,6 +11,9 @@ from transduce.backends.base import (
     BackendCapabilities,
     BackendHealth,
     GenerationResult,
+    StreamChunk,
+    StreamFinal,
+    StreamTextDelta,
 )
 from transduce.backends.concurrency import (
     ConcurrencyLimitExceededError,
@@ -30,6 +34,7 @@ class _FakeBackend:
         self._cost = cost
         self.health_calls = 0
         self.generate_calls = 0
+        self.stream_calls = 0
 
     async def generate(
         self,
@@ -41,6 +46,18 @@ class _FakeBackend:
         self.generate_calls += 1
         await asyncio.sleep(0)
         return GenerationResult(text=f"echo:{prompt}", tokens_in=1, tokens_out=1)
+
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+    ) -> AsyncIterator[StreamChunk]:
+        del max_tokens, temperature
+        self.stream_calls += 1
+        yield StreamTextDelta(text=f"echo:{prompt}")
+        yield StreamFinal(tokens_in=1, tokens_out=1)
 
     async def health(self) -> BackendHealth:
         self.health_calls += 1
