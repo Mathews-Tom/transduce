@@ -29,11 +29,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from transduce.config.schema import ObservabilityConfig
-from transduce.observability.attributes import (
-    TRANSDUCE_TEXT_LENGTH,
-    TRANSDUCE_TEXT_SHA256_8,
-    TRANSDUCE_TEXT_VALUE,
-)
 from transduce.observability.redaction import sha256_8
 
 _TRACER_NAME: Final[str] = "transduce"
@@ -131,25 +126,15 @@ class SpanEmitter:
         ``redact_text_in_spans`` is false. The pairing is enforced by
         :meth:`ObservabilityConfig._debug_text_requires_redaction_off`,
         so the runtime never has to defend against the ambiguous case
-        of "include text but also redact." When ``key_prefix`` matches
-        the canonical ``transduce.text`` namespace the constants in
-        :mod:`transduce.observability.attributes` line up; ``key_prefix``
-        is exposed so per-stage spans can scope ``transduce.text.input``
-        vs ``transduce.text.output`` without rebuilding the dict.
+        of "include text but also redact." ``key_prefix`` is exposed
+        so per-stage spans can scope ``transduce.text.input`` vs
+        ``transduce.text.output`` without rebuilding the dict; the
+        default matches the canonical ``transduce.*`` constants in
+        :mod:`transduce.observability.attributes`.
         """
-        digest = sha256_8(text)
-        length = len(text)
-        if key_prefix == "transduce.text":
-            attrs: dict[str, AttrValue] = {
-                TRANSDUCE_TEXT_SHA256_8: digest,
-                TRANSDUCE_TEXT_LENGTH: length,
-            }
-            if self._allow_raw_text():
-                attrs[TRANSDUCE_TEXT_VALUE] = text
-            return attrs
-        attrs = {
-            f"{key_prefix}.sha256_8": digest,
-            f"{key_prefix}.length": length,
+        attrs: dict[str, AttrValue] = {
+            f"{key_prefix}.sha256_8": sha256_8(text),
+            f"{key_prefix}.length": len(text),
         }
         if self._allow_raw_text():
             attrs[f"{key_prefix}.value"] = text
