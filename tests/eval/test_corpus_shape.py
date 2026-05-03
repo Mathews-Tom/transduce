@@ -62,19 +62,29 @@ def test_faithfulness_corpus_has_both_accept_and_reject_per_category() -> None:
         assert label_counts["reject"] > 0, f"{category} has no reject records"
 
 
-def test_injection_corpus_loads_with_at_least_100_records() -> None:
+def test_injection_corpus_loads_with_at_least_200_records() -> None:
     records = load_injection_corpus()
 
-    assert len(records) >= 100
+    assert len(records) >= 200
 
 
 def test_injection_corpus_has_balanced_attack_and_benign_classes() -> None:
     records = load_injection_corpus()
     detection = Counter(record["expected_detection"] for record in records)
 
-    assert detection[True] >= 50, "injection corpus needs at least 50 attack prompts"
-    assert detection[False] >= 10, (
-        "injection corpus needs at least 10 benign prompts to measure FP rate"
+    assert detection[True] >= 150, "injection corpus needs at least 150 attack prompts"
+    assert detection[False] >= 50, (
+        "injection corpus needs at least 50 benign prompts to measure FP rate"
+    )
+
+
+def test_injection_corpus_attack_to_benign_ratio_is_at_least_3_to_1() -> None:
+    records = load_injection_corpus()
+    detection = Counter(record["expected_detection"] for record in records)
+
+    assert detection[True] >= 3 * detection[False], (
+        "injection corpus must keep attack:benign ratio >= 3:1 so detection "
+        "metrics are dominated by malicious prompts"
     )
 
 
