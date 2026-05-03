@@ -12,7 +12,11 @@ from collections import Counter
 
 import pytest
 
-from tests.eval.loader import load_faithfulness_corpus, load_injection_corpus
+from tests.eval.loader import (
+    load_faithfulness_corpus,
+    load_faithfulness_v0_2_corpus,
+    load_injection_corpus,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -84,3 +88,49 @@ def test_injection_corpus_covers_documented_attack_categories() -> None:
         "fence_breakout",
         "exfiltration",
     }.issubset(attack_categories)
+
+
+# ---------------------------------------------------------------------------
+# transduce-faithfulness v0.2 (multilingual subset)
+# ---------------------------------------------------------------------------
+
+
+def test_faithfulness_v0_2_loads_with_at_least_300_records() -> None:
+    records = load_faithfulness_v0_2_corpus()
+
+    assert len(records) >= 300
+
+
+def test_faithfulness_v0_2_languages_cover_en_de_fr() -> None:
+    records = load_faithfulness_v0_2_corpus()
+    languages = {record["language"] for record in records}
+
+    assert {"en", "de", "fr"}.issubset(languages)
+
+
+def test_faithfulness_v0_2_every_record_declares_language() -> None:
+    records = load_faithfulness_v0_2_corpus()
+
+    for index, record in enumerate(records):
+        assert isinstance(record.get("language"), str), (
+            f"record[{index}] is missing a language string"
+        )
+        assert record["language"], f"record[{index}] has empty language"
+
+
+def test_faithfulness_v0_2_has_at_least_thirty_non_english_records() -> None:
+    records = load_faithfulness_v0_2_corpus()
+    non_english = [record for record in records if record["language"] != "en"]
+
+    assert len(non_english) >= 30
+
+
+def test_faithfulness_v0_2_balanced_accept_and_reject_per_language() -> None:
+    records = load_faithfulness_v0_2_corpus()
+    by_language: dict[str, Counter[str]] = {}
+    for record in records:
+        by_language.setdefault(record["language"], Counter())[record["label"]] += 1
+
+    for language, label_counts in by_language.items():
+        assert label_counts["accept"] > 0, f"language {language!r} has no accept records"
+        assert label_counts["reject"] > 0, f"language {language!r} has no reject records"

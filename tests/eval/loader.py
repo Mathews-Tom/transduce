@@ -76,6 +76,38 @@ def load_faithfulness_corpus(
     return records
 
 
+def load_faithfulness_v0_2_corpus(
+    path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Load and validate the transduce-faithfulness v0.2 corpus.
+
+    Adds a strict ``language`` field check on top of the v0.1 schema:
+    every record must declare its source language so multilingual
+    subsets can be filtered without inferring from text. v0.1 records
+    are upgraded to ``language="en"`` by the v0.2 builder; native v0.2
+    records carry their actual language code.
+    """
+    target = path if path is not None else CORPUS_ROOT / "transduce_faithfulness_v0_2.jsonl"
+    records = list(iter_jsonl(target))
+    for index, record in enumerate(records):
+        for field in _FAITHFULNESS_REQUIRED:
+            if field not in record:
+                raise CorpusError(f"{target}[{index}] missing required field {field!r}")
+        if "language" not in record:
+            raise CorpusError(f"{target}[{index}] missing required field 'language'")
+        language = record["language"]
+        if not isinstance(language, str) or not language:
+            raise CorpusError(f"{target}[{index}] language must be a non-empty string")
+        if record["label"] not in _FAITHFULNESS_LABELS:
+            raise CorpusError(f"{target}[{index}] label must be one of {_FAITHFULNESS_LABELS}")
+        if record["category"] not in _FAITHFULNESS_CATEGORIES:
+            raise CorpusError(
+                f"{target}[{index}] category {record['category']!r} not in "
+                f"{_FAITHFULNESS_CATEGORIES}"
+            )
+    return records
+
+
 def load_injection_corpus(path: Path | None = None) -> list[dict[str, Any]]:
     """Load and validate the injection-attacks corpus."""
     target = path if path is not None else CORPUS_ROOT / "injection_attacks_v0_1.jsonl"
@@ -94,5 +126,6 @@ __all__ = [
     "CorpusError",
     "iter_jsonl",
     "load_faithfulness_corpus",
+    "load_faithfulness_v0_2_corpus",
     "load_injection_corpus",
 ]
