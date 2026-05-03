@@ -15,6 +15,7 @@ pure arithmetic with no resource cost.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 
 from transduce.backends.base import (
     Backend,
@@ -22,6 +23,7 @@ from transduce.backends.base import (
     BackendError,
     BackendHealth,
     GenerationResult,
+    StreamChunk,
 )
 
 
@@ -101,6 +103,31 @@ class SemaphoreBackend:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
+
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream through the inner backend under the same concurrency limit.
+
+        The semaphore is held for the lifetime of the stream so a slow
+        client cannot starve the backend's permit pool by leaving an
+        idle stream open without consuming chunks.
+        """
+        if self._semaphore.locked():
+            raise ConcurrencyLimitExceededError(
+                backend_id=self._backend_id,
+                limit=self._limit,
+                retry_after_s=self._retry_after_s,
+            )
+        async with self._semaphore:
+            async for chunk in self._inner.stream(
+                prompt, max_tokens=max_tokens, temperature=temperature
+            ):
+                yield chunk
 
     async def health(self) -> BackendHealth:
         return await self._inner.health()

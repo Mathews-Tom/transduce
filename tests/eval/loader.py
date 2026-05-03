@@ -27,10 +27,21 @@ _INJECTION_REQUIRED: tuple[str, ...] = (
     "prompt",
     "expected_detection",
 )
+_COMPOSITION_REQUIRED: tuple[str, ...] = (
+    "category",
+    "original",
+    "stage_1",
+    "stage_2",
+    "expected_composite_verdict",
+)
 _FAITHFULNESS_LABELS: frozenset[str] = frozenset({"accept", "reject"})
 _FAITHFULNESS_CATEGORIES: frozenset[str] = frozenset(
     {"negation", "antonym", "tense", "number", "entity", "fact_drift"}
 )
+_COMPOSITION_CATEGORIES: frozenset[str] = frozenset(
+    {"faithful_chain", "drift_accumulated", "intensity_overshoot"}
+)
+_COMPOSITION_VERDICTS: frozenset[str] = frozenset({"accept", "reject"})
 
 
 class CorpusError(RuntimeError):
@@ -76,6 +87,65 @@ def load_faithfulness_corpus(
     return records
 
 
+def load_faithfulness_v0_2_corpus(
+    path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Load and validate the transduce-faithfulness v0.2 corpus.
+
+    Adds a strict ``language`` field check on top of the v0.1 schema:
+    every record must declare its source language so multilingual
+    subsets can be filtered without inferring from text. v0.1 records
+    are upgraded to ``language="en"`` by the v0.2 builder; native v0.2
+    records carry their actual language code.
+    """
+    target = path if path is not None else CORPUS_ROOT / "transduce_faithfulness_v0_2.jsonl"
+    records = list(iter_jsonl(target))
+    for index, record in enumerate(records):
+        for field in _FAITHFULNESS_REQUIRED:
+            if field not in record:
+                raise CorpusError(f"{target}[{index}] missing required field {field!r}")
+        if "language" not in record:
+            raise CorpusError(f"{target}[{index}] missing required field 'language'")
+        language = record["language"]
+        if not isinstance(language, str) or not language:
+            raise CorpusError(f"{target}[{index}] language must be a non-empty string")
+        if record["label"] not in _FAITHFULNESS_LABELS:
+            raise CorpusError(f"{target}[{index}] label must be one of {_FAITHFULNESS_LABELS}")
+        if record["category"] not in _FAITHFULNESS_CATEGORIES:
+            raise CorpusError(
+                f"{target}[{index}] category {record['category']!r} not in "
+                f"{_FAITHFULNESS_CATEGORIES}"
+            )
+    return records
+
+
+def load_composition_corpus(path: Path | None = None) -> list[dict[str, Any]]:
+    """Load and validate the transduce-composition corpus.
+
+    Each record is a (original, stage_1, stage_2, expected_composite_verdict)
+    triple covering faithful chains, accumulated drift, and intensity
+    overshoot — the three failure modes the composite verifier must
+    distinguish per ``docs/system-design.md`` §Composite Verifier.
+    """
+    target = path if path is not None else CORPUS_ROOT / "transduce_composition_v0_1.jsonl"
+    records = list(iter_jsonl(target))
+    for index, record in enumerate(records):
+        for field in _COMPOSITION_REQUIRED:
+            if field not in record:
+                raise CorpusError(f"{target}[{index}] missing required field {field!r}")
+        if record["expected_composite_verdict"] not in _COMPOSITION_VERDICTS:
+            raise CorpusError(
+                f"{target}[{index}] expected_composite_verdict must be one of "
+                f"{_COMPOSITION_VERDICTS}"
+            )
+        if record["category"] not in _COMPOSITION_CATEGORIES:
+            raise CorpusError(
+                f"{target}[{index}] category {record['category']!r} not in "
+                f"{_COMPOSITION_CATEGORIES}"
+            )
+    return records
+
+
 def load_injection_corpus(path: Path | None = None) -> list[dict[str, Any]]:
     """Load and validate the injection-attacks corpus."""
     target = path if path is not None else CORPUS_ROOT / "injection_attacks_v0_1.jsonl"
@@ -93,6 +163,8 @@ __all__ = [
     "CORPUS_ROOT",
     "CorpusError",
     "iter_jsonl",
+    "load_composition_corpus",
     "load_faithfulness_corpus",
+    "load_faithfulness_v0_2_corpus",
     "load_injection_corpus",
 ]

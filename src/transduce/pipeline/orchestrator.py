@@ -20,6 +20,7 @@ from __future__ import annotations
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from jinja2 import Environment, StrictUndefined
 
@@ -37,6 +38,32 @@ from transduce.budget.budgeter import Budgeter, BudgetExceededError
 from transduce.config.schema import BudgetConfig
 from transduce.diff.word_level import compute_diff
 from transduce.injection.fence import SpotlightFence, build_fence
+from transduce.observability import SpanEmitter
+from transduce.observability.attributes import (
+    GEN_AI_REQUEST_MODEL,
+    GEN_AI_SYSTEM,
+    GEN_AI_SYSTEM_TRANSDUCE,
+    GEN_AI_USAGE_INPUT_TOKENS,
+    GEN_AI_USAGE_OUTPUT_TOKENS,
+    SPAN_COMPOSE,
+    SPAN_DIFF,
+    SPAN_GENERATE,
+    SPAN_VERIFY,
+    TRANSDUCE_ATTEMPT,
+    TRANSDUCE_COMPOSE_DRIFT_TOTAL,
+    TRANSDUCE_COMPOSE_STAGES,
+    TRANSDUCE_DIFF_CHARS_CHANGED,
+    TRANSDUCE_DIFF_OPS_COUNT,
+    TRANSDUCE_MODE_ID,
+    TRANSDUCE_MODE_VERSION,
+    TRANSDUCE_REJECTION_REASON,
+    TRANSDUCE_SCORER_COSINE,
+    TRANSDUCE_SCORER_HHEM,
+    TRANSDUCE_SCORER_NEGATION_DIFF_COUNT,
+    TRANSDUCE_SCORER_NLI_BACKWARD,
+    TRANSDUCE_SCORER_NLI_FORWARD,
+    TRANSDUCE_VERDICT,
+)
 from transduce.pipeline.composition import per_stage_intensity, preservation_union
 from transduce.registry.spec import ModeSpec, PreserveRule
 from transduce.registry.static import StaticRegistry
@@ -124,6 +151,7 @@ class Orchestrator:
         default_max_retries: int = 3,
         max_tokens_floor: int = 256,
         max_tokens_ratio: float = 1.5,
+        span_emitter: SpanEmitter | None = None,
     ) -> None:
         if default_max_retries < 0 or default_max_retries > _MAX_RETRIES_CEILING:
             raise ValueError(f"default_max_retries must be within [0, {_MAX_RETRIES_CEILING}]")
@@ -139,6 +167,7 @@ class Orchestrator:
         self._default_max_retries = default_max_retries
         self._max_tokens_floor = max_tokens_floor
         self._max_tokens_ratio = max_tokens_ratio
+        self._span_emitter = span_emitter or SpanEmitter.disabled()
         self._jinja = Environment(
             undefined=StrictUndefined,
             autoescape=False,  # noqa: S701  # nosec B701 — prompts feed an LLM, not HTML
@@ -196,11 +225,16 @@ class Orchestrator:
 
         for attempt in range(retries_cap + 1):
             generate_start = time.perf_counter()
-            candidate = await self._backend.generate(
-                rendered_prompt,
-                max_tokens=max_tokens,
-                temperature=0.0,
-            )
+            with self._span_emitter.span(
+                SPAN_GENERATE, _generate_open_attrs(self._backend, spec, attempt + 1)
+            ) as gen_span:
+                candidate = await self._backend.generate(
+                    rendered_prompt,
+                    max_tokens=max_tokens,
+                    temperature=0.0,
+                )
+                gen_span.set_attribute(GEN_AI_USAGE_INPUT_TOKENS, candidate.tokens_in)
+                gen_span.set_attribute(GEN_AI_USAGE_OUTPUT_TOKENS, candidate.tokens_out)
             generate_total_ms += _elapsed_ms(generate_start)
 
             attempt_cost = self._backend.cost_estimate(
@@ -217,13 +251,20 @@ class Orchestrator:
             )
 
             verify_start = time.perf_counter()
-            outcome = self._verifier.run(text, candidate.text)
+            with self._span_emitter.span(
+                SPAN_VERIFY,
+                {TRANSDUCE_MODE_ID: spec.id, TRANSDUCE_MODE_VERSION: spec.version},
+            ) as ver_span:
+                outcome = self._verifier.run(text, candidate.text)
+                _set_verify_attrs(ver_span, outcome)
             verify_total_ms += _elapsed_ms(verify_start)
             budgeter.record_score(score=_aggregate_score(outcome))
 
             if outcome.verdict == "accept":
                 diff_start = time.perf_counter()
-                diff = tuple(compute_diff(text, candidate.text))
+                with self._span_emitter.span(SPAN_DIFF) as diff_span:
+                    diff = tuple(compute_diff(text, candidate.text))
+                    _set_diff_attrs(diff_span, diff)
                 diff_ms = _elapsed_ms(diff_start)
                 return OrchestratorResult(
                     mode=mode_ref,
@@ -321,24 +362,37 @@ class Orchestrator:
         last_stage_outcome_scores: VerificationScores | None = None
         total_retries = 0
 
-        for spec in specs:
-            stage_result = await self._transform_single_stage(
-                input_text=current_text,
-                spec=spec,
-                intensity=stage_intensity,
-                preserve=union_preserve,
-                max_retries=max_retries,
-                budgeter=budgeter,
-                budget_limit=budget_limit,
-            )
-            current_text = stage_result.transformed
-            all_attempts.extend(stage_result.attempts)
-            generate_total_ms += stage_result.generate_ms
-            verify_total_ms += stage_result.verify_ms
-            last_stage_outcome_scores = stage_result.scores
-            total_retries += stage_result.retries
+        with self._span_emitter.span(
+            SPAN_COMPOSE, {TRANSDUCE_COMPOSE_STAGES: len(specs)}
+        ) as compose_span:
+            for spec in specs:
+                stage_result = await self._transform_single_stage(
+                    input_text=current_text,
+                    spec=spec,
+                    intensity=stage_intensity,
+                    preserve=union_preserve,
+                    max_retries=max_retries,
+                    budgeter=budgeter,
+                    budget_limit=budget_limit,
+                )
+                current_text = stage_result.transformed
+                all_attempts.extend(stage_result.attempts)
+                generate_total_ms += stage_result.generate_ms
+                verify_total_ms += stage_result.verify_ms
+                last_stage_outcome_scores = stage_result.scores
+                total_retries += stage_result.retries
 
-        composite_outcome = self._composite_verifier.run(text, current_text)
+            with self._span_emitter.span(SPAN_VERIFY) as composite_span:
+                composite_outcome = self._composite_verifier.run(text, current_text)
+                composite_span.set_attribute(TRANSDUCE_VERDICT, composite_outcome.verdict)
+                composite_span.set_attribute(
+                    TRANSDUCE_COMPOSE_DRIFT_TOTAL,
+                    1.0 - composite_outcome.aggregate_score,
+                )
+            compose_span.set_attribute(
+                TRANSDUCE_COMPOSE_DRIFT_TOTAL, 1.0 - composite_outcome.aggregate_score
+            )
+
         if composite_outcome.verdict == "reject":
             raise CompositeVerificationFailedError(
                 last_candidate=current_text,
@@ -347,7 +401,9 @@ class Orchestrator:
             )
 
         diff_start = time.perf_counter()
-        diff = tuple(compute_diff(text, current_text))
+        with self._span_emitter.span(SPAN_DIFF) as diff_span:
+            diff = tuple(compute_diff(text, current_text))
+            _set_diff_attrs(diff_span, diff)
         diff_ms = _elapsed_ms(diff_start)
 
         if last_stage_outcome_scores is None:  # pragma: no cover — requires non-empty modes
@@ -411,9 +467,14 @@ class Orchestrator:
 
         for attempt in range(retries_cap + 1):
             generate_start = time.perf_counter()
-            candidate = await self._backend.generate(
-                rendered_prompt, max_tokens=max_tokens, temperature=0.0
-            )
+            with self._span_emitter.span(
+                SPAN_GENERATE, _generate_open_attrs(self._backend, spec, attempt + 1)
+            ) as gen_span:
+                candidate = await self._backend.generate(
+                    rendered_prompt, max_tokens=max_tokens, temperature=0.0
+                )
+                gen_span.set_attribute(GEN_AI_USAGE_INPUT_TOKENS, candidate.tokens_in)
+                gen_span.set_attribute(GEN_AI_USAGE_OUTPUT_TOKENS, candidate.tokens_out)
             generate_total_ms += _elapsed_ms(generate_start)
 
             attempt_cost = self._backend.cost_estimate(
@@ -430,7 +491,12 @@ class Orchestrator:
             )
 
             verify_start = time.perf_counter()
-            outcome = self._verifier.run(input_text, candidate.text)
+            with self._span_emitter.span(
+                SPAN_VERIFY,
+                {TRANSDUCE_MODE_ID: spec.id, TRANSDUCE_MODE_VERSION: spec.version},
+            ) as ver_span:
+                outcome = self._verifier.run(input_text, candidate.text)
+                _set_verify_attrs(ver_span, outcome)
             verify_total_ms += _elapsed_ms(verify_start)
             budgeter.record_score(score=_aggregate_score(outcome))
 
@@ -694,3 +760,64 @@ _SCORER_GUIDANCE: dict[str, str] = {
     "date_preservation": ("preserve every date and temporal marker exactly as written"),
     "length_delta": ("respect the configured length band; the previous output was outside it"),
 }
+
+
+def _generate_open_attrs(
+    backend: Backend, spec: ModeSpec, attempt: int
+) -> dict[str, str | int | float | bool]:
+    """Initial attributes set on a ``transduce.generate`` span at start.
+
+    The token-count attributes (``gen_ai.usage.*``) are set after the
+    backend returns a :class:`~transduce.backends.base.GenerationResult`;
+    this helper covers the per-attempt context that is known up front
+    so the open attributes match across the single-mode and per-stage
+    code paths.
+    """
+    return {
+        GEN_AI_SYSTEM: GEN_AI_SYSTEM_TRANSDUCE,
+        GEN_AI_REQUEST_MODEL: backend.model,
+        TRANSDUCE_MODE_ID: spec.id,
+        TRANSDUCE_MODE_VERSION: spec.version,
+        TRANSDUCE_ATTEMPT: attempt,
+    }
+
+
+def _set_verify_attrs(span: Any, outcome: PipelineOutcome) -> None:
+    """Populate a ``transduce.verify`` span with per-scorer attributes.
+
+    Only sets attributes whose scorers actually ran — scorers that
+    short-circuited via earlier rejection leave their slots unset
+    rather than emitting fake zeros. ``transduce.verdict`` and
+    ``transduce.rejection_reason`` always land so trace queries can
+    filter on accept/reject without parsing the per-scorer values.
+    """
+    by_name = {result.name: result for result in outcome.results}
+    span.set_attribute(TRANSDUCE_VERDICT, outcome.verdict)
+    if outcome.rejection_reason is not None:
+        span.set_attribute(TRANSDUCE_REJECTION_REASON, outcome.rejection_reason)
+    if "cosine_similarity" in by_name:
+        span.set_attribute(TRANSDUCE_SCORER_COSINE, by_name["cosine_similarity"].value)
+    if "bidirectional_nli" in by_name:
+        nli = by_name["bidirectional_nli"]
+        forward = nli.details.get("forward")
+        backward = nli.details.get("backward")
+        if isinstance(forward, (int, float)):
+            span.set_attribute(TRANSDUCE_SCORER_NLI_FORWARD, float(forward))
+        if isinstance(backward, (int, float)):
+            span.set_attribute(TRANSDUCE_SCORER_NLI_BACKWARD, float(backward))
+    if "hhem_factuality" in by_name:
+        span.set_attribute(TRANSDUCE_SCORER_HHEM, by_name["hhem_factuality"].value)
+    if "negation_diff" in by_name:
+        details = by_name["negation_diff"].details
+        added = details.get("added")
+        removed = details.get("removed")
+        added_count = len(added) if isinstance(added, list) else 0
+        removed_count = len(removed) if isinstance(removed, list) else 0
+        span.set_attribute(TRANSDUCE_SCORER_NEGATION_DIFF_COUNT, added_count + removed_count)
+
+
+def _set_diff_attrs(span: Any, diff: Sequence[DiffOp]) -> None:
+    """Populate a ``transduce.diff`` span with shape attributes."""
+    chars_changed = sum(len(op.text) for op in diff if op.op != "equal")
+    span.set_attribute(TRANSDUCE_DIFF_OPS_COUNT, len(diff))
+    span.set_attribute(TRANSDUCE_DIFF_CHARS_CHANGED, chars_changed)

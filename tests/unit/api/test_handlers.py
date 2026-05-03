@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 
 import pytest
@@ -11,7 +11,14 @@ from litestar.testing import TestClient
 
 from transduce.api.app import create_app
 from transduce.api.schemas import StreamingMode
-from transduce.backends.base import BackendCapabilities, BackendHealth, GenerationResult
+from transduce.backends.base import (
+    BackendCapabilities,
+    BackendHealth,
+    GenerationResult,
+    StreamChunk,
+    StreamFinal,
+    StreamTextDelta,
+)
 from transduce.config.schema import (
     BackendEntry,
     BackendsConfig,
@@ -48,6 +55,19 @@ class StubBackend:
         if not self.queue:
             return GenerationResult(text="ok", tokens_in=2, tokens_out=2)
         return self.queue.pop(0)
+
+    async def stream(
+        self, prompt: str, *, max_tokens: int, temperature: float
+    ) -> AsyncIterator[StreamChunk]:
+        del prompt, max_tokens, temperature
+        next_result = (
+            self.queue.pop(0)
+            if self.queue
+            else GenerationResult(text="ok", tokens_in=2, tokens_out=2)
+        )
+        if next_result.text:
+            yield StreamTextDelta(text=next_result.text)
+        yield StreamFinal(tokens_in=next_result.tokens_in, tokens_out=next_result.tokens_out)
 
     async def health(self) -> BackendHealth:
         return BackendHealth(healthy=self.healthy, detail=None if self.healthy else "down")

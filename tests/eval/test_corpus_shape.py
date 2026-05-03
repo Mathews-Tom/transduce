@@ -12,7 +12,12 @@ from collections import Counter
 
 import pytest
 
-from tests.eval.loader import load_faithfulness_corpus, load_injection_corpus
+from tests.eval.loader import (
+    load_composition_corpus,
+    load_faithfulness_corpus,
+    load_faithfulness_v0_2_corpus,
+    load_injection_corpus,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -57,19 +62,29 @@ def test_faithfulness_corpus_has_both_accept_and_reject_per_category() -> None:
         assert label_counts["reject"] > 0, f"{category} has no reject records"
 
 
-def test_injection_corpus_loads_with_at_least_100_records() -> None:
+def test_injection_corpus_loads_with_at_least_200_records() -> None:
     records = load_injection_corpus()
 
-    assert len(records) >= 100
+    assert len(records) >= 200
 
 
 def test_injection_corpus_has_balanced_attack_and_benign_classes() -> None:
     records = load_injection_corpus()
     detection = Counter(record["expected_detection"] for record in records)
 
-    assert detection[True] >= 50, "injection corpus needs at least 50 attack prompts"
-    assert detection[False] >= 10, (
-        "injection corpus needs at least 10 benign prompts to measure FP rate"
+    assert detection[True] >= 150, "injection corpus needs at least 150 attack prompts"
+    assert detection[False] >= 50, (
+        "injection corpus needs at least 50 benign prompts to measure FP rate"
+    )
+
+
+def test_injection_corpus_attack_to_benign_ratio_is_at_least_3_to_1() -> None:
+    records = load_injection_corpus()
+    detection = Counter(record["expected_detection"] for record in records)
+
+    assert detection[True] >= 3 * detection[False], (
+        "injection corpus must keep attack:benign ratio >= 3:1 so detection "
+        "metrics are dominated by malicious prompts"
     )
 
 
@@ -84,3 +99,100 @@ def test_injection_corpus_covers_documented_attack_categories() -> None:
         "fence_breakout",
         "exfiltration",
     }.issubset(attack_categories)
+
+
+# ---------------------------------------------------------------------------
+# transduce-faithfulness v0.2 (multilingual subset)
+# ---------------------------------------------------------------------------
+
+
+def test_faithfulness_v0_2_loads_with_at_least_300_records() -> None:
+    records = load_faithfulness_v0_2_corpus()
+
+    assert len(records) >= 300
+
+
+def test_faithfulness_v0_2_languages_cover_en_de_fr() -> None:
+    records = load_faithfulness_v0_2_corpus()
+    languages = {record["language"] for record in records}
+
+    assert {"en", "de", "fr"}.issubset(languages)
+
+
+def test_faithfulness_v0_2_every_record_declares_language() -> None:
+    records = load_faithfulness_v0_2_corpus()
+
+    for index, record in enumerate(records):
+        assert isinstance(record.get("language"), str), (
+            f"record[{index}] is missing a language string"
+        )
+        assert record["language"], f"record[{index}] has empty language"
+
+
+def test_faithfulness_v0_2_has_at_least_thirty_non_english_records() -> None:
+    records = load_faithfulness_v0_2_corpus()
+    non_english = [record for record in records if record["language"] != "en"]
+
+    assert len(non_english) >= 30
+
+
+def test_faithfulness_v0_2_balanced_accept_and_reject_per_language() -> None:
+    records = load_faithfulness_v0_2_corpus()
+    by_language: dict[str, Counter[str]] = {}
+    for record in records:
+        by_language.setdefault(record["language"], Counter())[record["label"]] += 1
+
+    for language, label_counts in by_language.items():
+        assert label_counts["accept"] > 0, f"language {language!r} has no accept records"
+        assert label_counts["reject"] > 0, f"language {language!r} has no reject records"
+
+
+# ---------------------------------------------------------------------------
+# transduce-composition v0.1 (compose-chain drift cases)
+# ---------------------------------------------------------------------------
+
+
+def test_composition_corpus_has_at_least_100_records() -> None:
+    records = load_composition_corpus()
+
+    assert len(records) >= 100
+
+
+def test_composition_corpus_covers_three_drift_categories() -> None:
+    records = load_composition_corpus()
+    categories = {record["category"] for record in records}
+
+    assert categories == {"faithful_chain", "drift_accumulated", "intensity_overshoot"}
+
+
+def test_composition_corpus_record_structure_has_two_stages() -> None:
+    records = load_composition_corpus()
+
+    for record in records:
+        assert isinstance(record["original"], str)
+        assert isinstance(record["stage_1"], str)
+        assert isinstance(record["stage_2"], str)
+        assert record["original"]
+        assert record["stage_1"]
+        assert record["stage_2"]
+
+
+def test_composition_corpus_faithful_chains_expect_accept() -> None:
+    records = load_composition_corpus()
+    faithful = [r for r in records if r["category"] == "faithful_chain"]
+
+    assert faithful, "no faithful_chain records present"
+    for record in faithful:
+        assert record["expected_composite_verdict"] == "accept", (
+            f"faithful_chain record expected accept, got {record['expected_composite_verdict']!r}"
+        )
+
+
+def test_composition_corpus_drift_categories_expect_reject() -> None:
+    records = load_composition_corpus()
+    drift = [r for r in records if r["category"] in {"drift_accumulated", "intensity_overshoot"}]
+
+    for record in drift:
+        assert record["expected_composite_verdict"] == "reject", (
+            f"{record['category']!r} record expected reject"
+        )

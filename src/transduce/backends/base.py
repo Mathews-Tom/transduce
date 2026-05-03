@@ -10,7 +10,8 @@ same surface.
 
 from __future__ import annotations
 
-from typing import Protocol
+from collections.abc import AsyncIterator
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -33,6 +34,43 @@ class GenerationResult(BaseModel):
     text: str
     tokens_in: int = Field(ge=0)
     tokens_out: int = Field(ge=0)
+
+
+class StreamTextDelta(BaseModel):
+    """One text-delta event yielded by a streaming generation (P3-STR-01).
+
+    Streaming backends yield zero-or-more ``StreamTextDelta`` events
+    with monotonically-extending text segments, then a single
+    :class:`StreamFinal` carrying the prompt and completion token totals.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["text_delta"] = "text_delta"
+    text: str = Field(min_length=1)
+
+
+class StreamFinal(BaseModel):
+    """Terminal event for a streaming generation (P3-STR-01).
+
+    Closes a stream with the final token totals so the budgeter and the
+    OTel ``transduce.generate`` span can record the same usage as the
+    non-streaming path. Backends that cannot extract the token totals
+    from their stream (some OpenAI-compatible servers omit ``usage``
+    under streaming) return zeros — the budgeter records ``0.0`` for
+    the attempt while still bounding ``max_retries``, mirroring the
+    local-backend cost-estimate convention.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["final"] = "final"
+    tokens_in: int = Field(ge=0)
+    tokens_out: int = Field(ge=0)
+
+
+StreamChunk = StreamTextDelta | StreamFinal
+"""Discriminated union of events a backend yields during streaming."""
 
 
 class BackendHealth(BaseModel):
@@ -102,6 +140,25 @@ class Backend(Protocol):
         temperature: float,
     ) -> GenerationResult:
         """Generate a completion for ``prompt`` and return its text + token counts."""
+        ...  # pragma: no cover — Protocol method
+
+    def stream(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream a generation for ``prompt`` as text deltas + a final event (P3-STR-01).
+
+        Concrete implementations are ``async def`` generators: they
+        yield :class:`StreamTextDelta` instances for each provider
+        chunk and exactly one :class:`StreamFinal` after the stream
+        closes. Backends that do not advertise ``capabilities.streaming``
+        may raise :class:`NotImplementedError` from this method;
+        ``post_transform_stream`` validates the capability before
+        invoking it so honest 400 responses are emitted at ingress.
+        """
         ...  # pragma: no cover — Protocol method
 
     async def health(self) -> BackendHealth:

@@ -1,4 +1,4 @@
-"""LiteLLM router meta-backend (P3-BACK-05).
+"""LiteLLM router meta-backend (P3-BACK-05, P3-STR-01).
 
 LiteLLM resolves a model alias to the upstream provider and dispatches
 the call. The router itself does not own a connection — its health
@@ -12,11 +12,16 @@ Pricing follows the operator-supplied :class:`TokenPricing` pattern.
 LiteLLM ships per-model price tables, but those drift over time and we
 already accept the price-override fields on ``BackendEntry``; treating
 operator config as the source of truth keeps cost accounting honest.
+
+The streaming variant calls ``litellm.acompletion(stream=True)``, which
+returns an async iterator over OpenAI-shaped delta chunks. The adapter
+unifies that onto the :class:`~transduce.backends.base.StreamChunk`
+union exactly as the direct OpenAI-compat adapter does.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import litellm
@@ -29,6 +34,9 @@ from transduce.backends.base import (
     GenerationFailedError,
     GenerationResult,
     GenerationTimeoutError,
+    StreamChunk,
+    StreamFinal,
+    StreamTextDelta,
     TokenPricing,
 )
 
@@ -40,7 +48,7 @@ class LiteLLMRouterBackend:
     """Backend adapter that delegates dispatch to the LiteLLM router."""
 
     name = "litellm"
-    capabilities = BackendCapabilities(streaming=False, json_mode=False, attention_output=False)
+    capabilities = BackendCapabilities(streaming=True, json_mode=False, attention_output=False)
 
     def __init__(
         self,
@@ -91,6 +99,53 @@ class LiteLLMRouterBackend:
             raise GenerationFailedError(f"litellm router API error: {exc}") from exc
 
         return _to_generation_result(response)
+
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int,
+        temperature: float,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream a router-dispatched generation as text deltas + a final event (P3-STR-01).
+
+        ``litellm.acompletion(stream=True)`` returns an async iterator
+        over OpenAI-shaped chunks; the adapter projects each
+        ``choices[0].delta.content`` onto :class:`StreamTextDelta` and
+        accumulates ``usage`` if the upstream provider emits it.
+        """
+        if max_tokens <= 0:
+            raise ValueError("max_tokens must be positive")
+        try:
+            response = await self._completion(
+                model=self.model,
+                api_key=self._api_key,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                temperature=temperature,
+                timeout=self._timeout_s,
+                stream=True,
+            )
+        except litellm_exceptions.Timeout as exc:
+            raise GenerationTimeoutError(
+                f"litellm router timed out after {self._timeout_s}s"
+            ) from exc
+        except litellm_exceptions.APIConnectionError as exc:
+            raise BackendUnavailableError(f"litellm upstream unreachable: {exc}") from exc
+        except litellm_exceptions.APIError as exc:
+            raise GenerationFailedError(f"litellm router API error: {exc}") from exc
+
+        tokens_in = 0
+        tokens_out = 0
+        async for chunk in response:
+            content = _extract_litellm_delta(chunk)
+            if content:
+                yield StreamTextDelta(text=content)
+            usage = getattr(chunk, "usage", None)
+            if usage is not None:
+                tokens_in = _coerce_token_count(getattr(usage, "prompt_tokens", None))
+                tokens_out = _coerce_token_count(getattr(usage, "completion_tokens", None))
+        yield StreamFinal(tokens_in=tokens_in, tokens_out=tokens_out)
 
     async def health(self) -> BackendHealth:
         """Validate the alias resolves to a known provider; the router has no socket."""
@@ -147,6 +202,20 @@ def _coerce_token_count(value: Any) -> int:
     if isinstance(value, int) and value >= 0:
         return value
     raise GenerationFailedError(f"litellm returned non-integer token count: {value!r}")
+
+
+def _extract_litellm_delta(chunk: Any) -> str | None:
+    """Pull ``choices[0].delta.content`` from a LiteLLM streaming chunk."""
+    choices = getattr(chunk, "choices", None)
+    if not isinstance(choices, list) or not choices:
+        return None
+    delta = getattr(choices[0], "delta", None)
+    if delta is None:
+        return None
+    content = getattr(delta, "content", None)
+    if isinstance(content, str) and content:
+        return content
+    return None
 
 
 __all__ = ["CompletionFn", "LiteLLMRouterBackend"]

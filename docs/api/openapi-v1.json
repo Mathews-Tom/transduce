@@ -1,0 +1,826 @@
+{
+  "components": {
+    "schemas": {
+      "AttemptCost": {
+        "properties": {
+          "attempt": {
+            "minimum": 1.0,
+            "type": "integer"
+          },
+          "tokens_in": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "tokens_out": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "usd": {
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "attempt",
+          "tokens_in",
+          "tokens_out",
+          "usd"
+        ],
+        "title": "AttemptCost",
+        "type": "object"
+      },
+      "BackendInfo": {
+        "properties": {
+          "model": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provider": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "provider"
+        ],
+        "title": "BackendInfo",
+        "type": "object"
+      },
+      "BackendOverride": {
+        "properties": {
+          "model": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "provider": {
+            "const": "ollama",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "provider"
+        ],
+        "title": "BackendOverride",
+        "type": "object"
+      },
+      "CostBreakdown": {
+        "properties": {
+          "by_attempt": {
+            "items": {
+              "$ref": "#/components/schemas/AttemptCost"
+            },
+            "type": "array"
+          },
+          "tokens_in_total": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "tokens_out_total": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "usd_total": {
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "by_attempt",
+          "tokens_in_total",
+          "tokens_out_total",
+          "usd_total"
+        ],
+        "title": "CostBreakdown",
+        "type": "object"
+      },
+      "DiffOp": {
+        "properties": {
+          "op": {
+            "enum": [
+              "equal",
+              "insert",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op",
+          "text"
+        ],
+        "title": "DiffOp",
+        "type": "object"
+      },
+      "ModeRef": {
+        "properties": {
+          "id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "version": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "ModeRef",
+        "type": "object"
+      },
+      "NegationDiffResult": {
+        "properties": {
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "removed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [],
+        "title": "NegationDiffResult",
+        "type": "object"
+      },
+      "PreserveRule": {
+        "description": "Preservation categories surfaced in mode specs and transform requests.",
+        "enum": [
+          "entities",
+          "numbers",
+          "urls",
+          "dates"
+        ],
+        "title": "PreserveRule",
+        "type": "string"
+      },
+      "StreamingMode": {
+        "default": "off",
+        "description": "Streaming options for the v1 transform endpoints (P3-STR-01..02).\n\n    ``off`` is the default for ``POST /v1/transform`` and rejects use\n    of ``POST /v1/transform/stream``. ``advisory`` is the only mode\n    accepted by the streaming endpoint: chunks stream as the backend\n    produces them, the verifier runs once on the accumulated text, and\n    the final SSE event carries the verdict so clients can roll back\n    on rejection. ``strict`` is rejected with 400 ``not_implemented``\n    by the streaming endpoint — strict verification + token streaming\n    are architecturally incompatible per docs/system-design.md\n    §What This Design Deliberately Excludes.\n    ",
+        "enum": [
+          "off",
+          "advisory",
+          "strict"
+        ],
+        "title": "StreamingMode",
+        "type": "string"
+      },
+      "TimingBreakdown": {
+        "properties": {
+          "diff_ms": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "generate_ms": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "resolve_ms": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "verify_ms": {
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "diff_ms",
+          "generate_ms",
+          "resolve_ms",
+          "verify_ms"
+        ],
+        "title": "TimingBreakdown",
+        "type": "object"
+      },
+      "TransformRequest": {
+        "properties": {
+          "backend": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BackendOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intensity": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "mode": {
+            "description": "Mode id; list form is reserved for compose chains and is rejected in v0.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "preserve": {
+            "items": {
+              "$ref": "#/components/schemas/PreserveRule"
+            },
+            "type": "array"
+          },
+          "request_id": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "streaming": {
+            "$ref": "#/components/schemas/StreamingMode"
+          },
+          "text": {
+            "maxLength": 50000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "verification": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VerificationOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "text"
+        ],
+        "title": "TransformRequest",
+        "type": "object"
+      },
+      "TransformResponse": {
+        "properties": {
+          "backend_used": {
+            "$ref": "#/components/schemas/BackendInfo"
+          },
+          "composite_score": {
+            "maximum": 1.0,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cost": {
+            "$ref": "#/components/schemas/CostBreakdown"
+          },
+          "diff": {
+            "items": {
+              "$ref": "#/components/schemas/DiffOp"
+            },
+            "type": "array"
+          },
+          "language": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ModeRef"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModeRef"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "original": {
+            "type": "string"
+          },
+          "request_id": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "retries": {
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "scores": {
+            "$ref": "#/components/schemas/VerificationScores"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/TimingBreakdown"
+          },
+          "transformed": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend_used",
+          "cost",
+          "diff",
+          "language",
+          "mode",
+          "original",
+          "request_id",
+          "retries",
+          "scores",
+          "timing",
+          "transformed"
+        ],
+        "title": "TransformResponse",
+        "type": "object"
+      },
+      "VerificationOverride": {
+        "properties": {
+          "advisory": {
+            "default": false,
+            "type": "boolean"
+          },
+          "cosine_min": {
+            "maximum": 1.0,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "max_retries": {
+            "default": 3,
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "title": "VerificationOverride",
+        "type": "object"
+      },
+      "VerificationScores": {
+        "properties": {
+          "cosine": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "hhem": {
+            "maximum": 1.0,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode_specific": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "negation_diff": {
+            "$ref": "#/components/schemas/NegationDiffResult"
+          },
+          "nli_backward": {
+            "maximum": 1.0,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nli_forward": {
+            "maximum": 1.0,
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "preserved": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object"
+          },
+          "rejection_reason": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "topical_similarity": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "cosine",
+          "preserved",
+          "topical_similarity"
+        ],
+        "title": "VerificationScores",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Litestar API",
+    "version": "1.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "deprecated": false,
+        "operationId": "HealthzHealthz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          }
+        },
+        "summary": "Healthz"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "deprecated": false,
+        "operationId": "MetricsMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          }
+        },
+        "summary": "Metrics"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "deprecated": false,
+        "operationId": "ReadyzReadyz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          }
+        },
+        "summary": "Readyz"
+      }
+    },
+    "/v1/backends": {
+      "get": {
+        "deprecated": false,
+        "operationId": "V1BackendsListBackends",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          }
+        },
+        "summary": "ListBackends"
+      }
+    },
+    "/v1/modes": {
+      "get": {
+        "deprecated": false,
+        "operationId": "V1ModesListModes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "additionalProperties": {},
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          }
+        },
+        "summary": "ListModes"
+      }
+    },
+    "/v1/modes/{mode_id}": {
+      "get": {
+        "deprecated": false,
+        "operationId": "V1ModesModeIdGetMode",
+        "parameters": [
+          {
+            "deprecated": false,
+            "in": "path",
+            "name": "mode_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Validation Exception",
+                  "examples": [
+                    {
+                      "detail": "Bad Request",
+                      "extra": {},
+                      "status_code": 400
+                    }
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "extra": {
+                      "additionalProperties": {},
+                      "type": [
+                        "null",
+                        "object",
+                        "array"
+                      ]
+                    },
+                    "status_code": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "detail",
+                    "status_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad request syntax or unsupported method"
+          }
+        },
+        "summary": "GetMode"
+      }
+    },
+    "/v1/scorers": {
+      "get": {
+        "deprecated": false,
+        "operationId": "V1ScorersListScorers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          }
+        },
+        "summary": "ListScorers"
+      }
+    },
+    "/v1/transform": {
+      "post": {
+        "deprecated": false,
+        "operationId": "V1TransformPostTransform",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformResponse"
+                }
+              }
+            },
+            "description": "Document created, URL follows",
+            "headers": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Validation Exception",
+                  "examples": [
+                    {
+                      "detail": "Bad Request",
+                      "extra": {},
+                      "status_code": 400
+                    }
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "extra": {
+                      "additionalProperties": {},
+                      "type": [
+                        "null",
+                        "object",
+                        "array"
+                      ]
+                    },
+                    "status_code": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "detail",
+                    "status_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad request syntax or unsupported method"
+          }
+        },
+        "summary": "PostTransform"
+      }
+    },
+    "/v1/transform/stream": {
+      "post": {
+        "deprecated": false,
+        "operationId": "V1TransformStreamPostTransformStream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransformRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Request fulfilled, document follows",
+            "headers": {}
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Validation Exception",
+                  "examples": [
+                    {
+                      "detail": "Bad Request",
+                      "extra": {},
+                      "status_code": 400
+                    }
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    },
+                    "extra": {
+                      "additionalProperties": {},
+                      "type": [
+                        "null",
+                        "object",
+                        "array"
+                      ]
+                    },
+                    "status_code": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "detail",
+                    "status_code"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Bad request syntax or unsupported method"
+          }
+        },
+        "summary": "PostTransformStream"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ]
+}

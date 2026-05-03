@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-03
+
+First production release of the v1 substrate. Lands the streaming, observability, and eval-corpus deliverables that were deferred from `v1.0.0-rc1`. The substrate from rc1 (five backend adapters, compose chains, per-request cost guard, language detection, multi-version mode dispatch, five additional seed modes) ships unchanged.
+
+### Added
+
+- **OTel GenAI SemConv span emission (P3-OBS-01..04).** `transduce.observability` ships `SpanEmitter` and `build_tracer_provider` so the orchestrator and HTTP handlers emit a parent `gen_ai.client.request` span with `transduce.scan`, `transduce.generate`, `transduce.verify`, `transduce.compose`, and `transduce.diff` children. Standard `gen_ai.*` attributes (system, request model, input/output tokens) plus `transduce.*` extensions (mode id, language, verdict, retries, cost, per-scorer values) are emitted on every request. Raw text is banned from span attributes by default; `transduce.text.sha256_8` and `transduce.text.length` are the privacy-default surface, with an opt-in `debug.include_text=true` flag gated by the config validator and a stderr warning at startup.
+- **Streaming generate Protocol method (P3-STR-01 substrate).** `Backend` Protocol gains `stream() -> AsyncIterator[StreamChunk]`. The four production adapters — Ollama (NDJSON), Anthropic (SDK events), OpenAI-compat (SSE), LiteLLM router (async iterator) — project their native streaming protocols onto the unified `StreamChunk` union. `BackendCapabilities.streaming` flips to `true` for each.
+- **Advisory SSE transform endpoint (P3-STR-01..02).** `POST /v1/transform/stream` returns `text/event-stream` with `event: chunk` per backend text-delta and a final `event: verdict` carrying the verifier outcome, transformed text, diff, scores, and timing. `streaming=advisory` is the only accepted mode at this endpoint; `strict` returns 400 `not_implemented`, `off` returns 400 `validation_error`, compose chains return 400 `not_implemented`, and a backend without `capabilities.streaming` returns 400 `not_implemented`.
+- **Streaming client rollback helper (P3-STR-03).** `transduce.streaming` ships `parse_sse_events` (low-level) and `stream_transform` (high-level httpx wrapper) with `ChunkEvent`, `VerdictEvent`, and `ErrorEvent` types. `VerdictEvent.rollback is True` when the verifier rejects, giving callers a one-line discard signal for partially-rendered text. The TypeScript reference SDK ships separately under the `armory` repo.
+- **`transduce-faithfulness` v0.2 multilingual subset (eval-suite expansion).** New `tests/eval/transduce_faithfulness_v0_2.jsonl` with 300 records: 202 from v0.1 (English, all six failure-mode categories) plus 98 hand-curated German and French records covering negation, antonym, and fact-drift. Every record declares `language`. The 500-record target stays the v1.5 floor.
+- **`transduce-composition` v0.1 corpus.** New `tests/eval/transduce_composition_v0_1.jsonl` with 104 records across `faithful_chain`, `drift_accumulated`, and `intensity_overshoot` categories. Each record carries `(original, stage_1, stage_2, expected_composite_verdict)` and exercises the composite verifier's end-to-end drift detection (P3-COMP-02 / N10).
+- **`transduce-injection-resilience` v0.1 expansion to 200 prompts.** Doubles the injection corpus (150 attacks + 50 benign controls) without adding new attack categories; the 3:1 attack:benign ratio is asserted by the structural test gate.
+- **`docs/observability.md`.** Documents the span hierarchy, `gen_ai.*` and `transduce.*` attribute reference, redaction policy, OTLP collector recipes (Jaeger, Phoenix, Langfuse, OTLP HTTP), and operator-question trace queries.
+- **`docs/api/openapi-v1.json` (frozen).** The v1 OpenAPI surface is checkpointed; `tools/freeze_openapi.py` regenerates it and `test_openapi_v1_frozen_matches_app_routes` blocks silent drift.
+
+### Changed
+
+- `StreamingMode` enum gains `ADVISORY` and `STRICT` members alongside the existing `OFF`. `OFF` remains the default for `POST /v1/transform`.
+- `Backend` Protocol gains `stream`. Existing adapters and test stubs add their `stream` implementation; `SemaphoreBackend` holds its permit for the lifetime of the inner stream so a slow client cannot starve the backend permit pool.
+- CLI `serve` builds and installs the OTel TracerProvider when `observability.enabled=true` and emits a stderr warning when `debug.include_text=true`.
+- Project `version` bumped from `0.5.0` to `1.0.0`. Trove classifier moves from `Development Status :: 2 - Pre-Alpha` to `Development Status :: 4 - Beta`.
+
+### Deferred to v1.5
+
+- Native-speaker review of the multilingual faithfulness pairs and category expansion to tense, number, and entity in non-English locales (target: 500-record corpus).
+- Hugging Face dataset hosting for `transduce-faithfulness` (`P3` exit criterion).
+- Live Anthropic / vLLM integration suites (CI provisioning of test keys with budget caps).
+- Public release announcement coordinated with the published benchmark.
+- Per-mode AUROC / detection-rate gates on the eval corpora — currently structural-only under `@pytest.mark.unit`; the slow eval gate ships in v1.5 with `@pytest.mark.eval`.
+
 ## [0.5.0] - 2026-05-02
 
 Second public preview shipping the v0.5 ensemble verifier, the Spotlighting injection fence and ingress scanner, and the sha256-pinned mode allowlist with manifest-only modes. Replaces the cosine-only verifier from v0 with an ordered ensemble (cosine → negation diff → bidirectional NLI → HHEM → preservation rules → mode-specific) and surfaces all per-scorer outputs on the response.

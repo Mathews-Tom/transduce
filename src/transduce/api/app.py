@@ -21,6 +21,7 @@ from transduce.api.handlers import (
     list_scorers,
     metrics,
     post_transform,
+    post_transform_stream,
     readyz,
 )
 from transduce.api.state import TransduceMetrics, TransduceState
@@ -29,6 +30,7 @@ from transduce.backends.ollama import OllamaBackend
 from transduce.config.schema import BackendEntry, Config
 from transduce.injection.scanner import InjectionScanner
 from transduce.language.detector import LanguageDetector
+from transduce.observability import SpanEmitter
 from transduce.pipeline.orchestrator import Orchestrator
 from transduce.registry.static import StaticRegistry, build_default_registry
 from transduce.verification.base import Scorer
@@ -56,6 +58,7 @@ def create_app(
     metrics_state: TransduceMetrics | None = None,
     injection_scanner: InjectionScanner | None = None,
     language_detector: LanguageDetector | None = None,
+    span_emitter: SpanEmitter | None = None,
 ) -> Litestar:
     """Build a Litestar app wired against ``config`` and optional overrides.
 
@@ -80,6 +83,7 @@ def create_app(
         scorers=scorers,
         threshold=max(0.0, config.verification.default_cosine_min - 0.05),
     )
+    resolved_emitter = span_emitter or SpanEmitter.from_config(config.observability)
     orchestrator = Orchestrator(
         registry=resolved_registry,
         backend=resolved_backend,
@@ -87,6 +91,7 @@ def create_app(
         budget_config=config.budget,
         composite_verifier=resolved_composite,
         default_max_retries=config.verification.max_retries,
+        span_emitter=resolved_emitter,
     )
     resolved_detector = language_detector or LanguageDetector(
         languages=config.language.languages,
@@ -103,6 +108,7 @@ def create_app(
         metrics=metrics_state or TransduceMetrics.build(),
         injection_scanner=injection_scanner or InjectionScanner(),
         language_detector=resolved_detector,
+        span_emitter=resolved_emitter,
         backend_id=default_entry.id,
         backend_model_size_b=default_entry.model_size_b,
     )
@@ -115,6 +121,7 @@ def create_app(
     litestar_app = Litestar(
         route_handlers=[
             post_transform,
+            post_transform_stream,
             list_modes,
             get_mode,
             list_backends,
