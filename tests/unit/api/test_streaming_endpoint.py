@@ -14,11 +14,14 @@ from transduce.api.app import create_app
 from transduce.backends.base import (
     BackendCapabilities,
     BackendHealth,
+    BackendUnavailableError,
     GenerationResult,
+    GenerationTimeoutError,
     StreamChunk,
     StreamFinal,
     StreamTextDelta,
 )
+from transduce.budget.budgeter import BudgetExceededError, BudgetState
 from transduce.config.schema import (
     BackendEntry,
     BackendsConfig,
@@ -255,6 +258,87 @@ def test_stream_advisory_unknown_mode_returns_404_mode_not_found() -> None:
 
     assert response.status_code == 404
     assert response.json()["error"] == "mode_not_found"
+
+
+@dataclass
+class _RaisingStreamingBackend(_StreamingStubBackend):
+    """Streaming stub that raises a configured exception mid-stream."""
+
+    raise_after: int = 1
+    exc_to_raise: Exception | None = None
+
+    async def stream(
+        self, prompt: str, *, max_tokens: int, temperature: float
+    ) -> AsyncIterator[StreamChunk]:
+        del prompt, max_tokens, temperature
+        for emitted, chunk in enumerate(self.chunks):
+            if emitted >= self.raise_after and self.exc_to_raise is not None:
+                raise self.exc_to_raise
+            yield StreamTextDelta(text=chunk)
+        if self.exc_to_raise is not None:
+            raise self.exc_to_raise
+        yield StreamFinal(tokens_in=self.tokens_in, tokens_out=self.tokens_out)
+
+
+def test_stream_advisory_emits_error_event_with_backend_unavailable_code() -> None:
+    backend = _RaisingStreamingBackend(
+        chunks=["partial"],
+        raise_after=1,
+        exc_to_raise=BackendUnavailableError("ollama unreachable at http://x"),
+    )
+    app = _app(backend=backend)
+    with TestClient(app=app) as client:
+        response = client.post(
+            "/v1/transform/stream",
+            json={"text": "hi there", "mode": "dejargon", "streaming": "advisory"},
+        )
+
+    assert response.status_code == 200
+    events = _parse_sse(response.text)
+    error_events = [data for name, data in events if name == "error"]
+    assert len(error_events) == 1
+    assert error_events[0]["error"] == "backend_unavailable"
+
+
+def test_stream_advisory_emits_error_event_with_timeout_code() -> None:
+    backend = _RaisingStreamingBackend(
+        chunks=["partial"],
+        raise_after=1,
+        exc_to_raise=GenerationTimeoutError("ollama streaming timed out after 60s"),
+    )
+    app = _app(backend=backend)
+    with TestClient(app=app) as client:
+        response = client.post(
+            "/v1/transform/stream",
+            json={"text": "hi there", "mode": "dejargon", "streaming": "advisory"},
+        )
+
+    events = _parse_sse(response.text)
+    error_events = [data for name, data in events if name == "error"]
+    assert error_events[0]["error"] == "timeout"
+
+
+def test_stream_advisory_emits_error_event_with_budget_exceeded_code() -> None:
+    state = BudgetState(total_cost_usd=0.10, attempts=2, scores=(0.5, 0.4))
+    backend = _RaisingStreamingBackend(
+        chunks=["partial"],
+        raise_after=1,
+        exc_to_raise=BudgetExceededError(
+            reason="budget_exceeded",
+            state=state,
+            limit=0.05,
+        ),
+    )
+    app = _app(backend=backend)
+    with TestClient(app=app) as client:
+        response = client.post(
+            "/v1/transform/stream",
+            json={"text": "hi there", "mode": "dejargon", "streaming": "advisory"},
+        )
+
+    events = _parse_sse(response.text)
+    error_events = [data for name, data in events if name == "error"]
+    assert error_events[0]["error"] == "budget_exceeded"
 
 
 def test_stream_advisory_includes_diff_in_verdict_event() -> None:

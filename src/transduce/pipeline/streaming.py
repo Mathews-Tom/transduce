@@ -41,6 +41,7 @@ from transduce.observability.attributes import (
     GEN_AI_SYSTEM_TRANSDUCE,
     GEN_AI_USAGE_INPUT_TOKENS,
     GEN_AI_USAGE_OUTPUT_TOKENS,
+    SPAN_DIFF,
     SPAN_GENERATE,
     SPAN_VERIFY,
     TRANSDUCE_ATTEMPT,
@@ -176,7 +177,7 @@ async def stream_transform(
     verify_ms = int((time.perf_counter() - verify_start) * 1000)
 
     diff_start = time.perf_counter()
-    with span_emitter.span("transduce.diff") as diff_span:
+    with span_emitter.span(SPAN_DIFF) as diff_span:
         diff = tuple(compute_diff(text, candidate_text))
         _set_diff_attrs(diff_span, diff)
     diff_ms = int((time.perf_counter() - diff_start) * 1000)

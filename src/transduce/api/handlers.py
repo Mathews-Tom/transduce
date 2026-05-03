@@ -22,8 +22,14 @@ from transduce.api.schemas import (
     TransformResponse,
 )
 from transduce.api.state import TransduceState
+from transduce.backends.base import (
+    BackendUnavailableError,
+    GenerationFailedError,
+    GenerationTimeoutError,
+)
 from transduce.backends.concurrency import ConcurrencyLimitExceededError
 from transduce.backends.preconditions import enforce_min_model_b
+from transduce.budget.budgeter import BudgetExceededError
 from transduce.injection.scanner import InputInjectionDetectedError
 from transduce.language.detector import LanguageNotSupportedError
 from transduce.observability.attributes import (
@@ -261,6 +267,19 @@ async def post_transform_stream(
     )
 
 
+# Maps backend / orchestrator exceptions onto SSE error-event ErrorCodes
+# so a streaming client can branch on cause the same way a non-streaming
+# client branches on the HTTP status / `error` envelope. Once SSE has
+# started streaming we cannot change the 200 response status, so the
+# error-event payload is the only signal — keep it accurate.
+_STREAM_ERROR_CODES: tuple[tuple[type[BaseException], ErrorCode], ...] = (
+    (BudgetExceededError, ErrorCode.BUDGET_EXCEEDED),
+    (BackendUnavailableError, ErrorCode.BACKEND_UNAVAILABLE),
+    (GenerationTimeoutError, ErrorCode.TIMEOUT),
+    (GenerationFailedError, ErrorCode.GENERATION_FAILED),
+)
+
+
 async def _streaming_event_messages(
     *,
     request_id: str,
@@ -271,58 +290,75 @@ async def _streaming_event_messages(
 ) -> AsyncIterator[ServerSentEventMessage]:
     """Convert :class:`stream_transform` events to SSE messages."""
     metric_mode_label = spec.id
-    try:
-        async for event in stream_transform(
-            text=data.text,
-            spec=spec,
-            backend=state.backend,
-            verifier=state.verifier,
-            intensity=data.intensity,
-            preserve=_coerce_preserve(data.preserve),
-            span_emitter=state.span_emitter,
-        ):
-            if isinstance(event, StreamChunkEvent):
-                yield ServerSentEventMessage(
-                    data=json.dumps({"text": event.text}),
-                    event="chunk",
-                )
-            elif isinstance(event, StreamVerdictEvent):
-                payload = {
-                    "request_id": request_id,
-                    "mode": event.mode.model_dump(mode="json"),
-                    "language": language,
-                    "verdict": event.verdict,
-                    "transformed": event.transformed,
-                    "rejection_reason": event.rejection_reason,
-                    "diff": list(event.diff),
-                    "scores": event.scores,
-                    "tokens_in": event.tokens_in,
-                    "tokens_out": event.tokens_out,
-                    "timing_ms": event.timing_ms,
-                }
-                yield ServerSentEventMessage(
-                    data=json.dumps(payload),
-                    event="verdict",
-                )
-    except ConcurrencyLimitExceededError as exc:
-        state.metrics.concurrency_rejections_total.labels(backend=exc.backend_id).inc()
-        state.metrics.requests_total.labels(mode=metric_mode_label, verdict="error").inc()
-        yield _stream_error_event(
-            request_id=request_id,
-            code=ErrorCode.CONCURRENCY_LIMIT_EXCEEDED,
-            message=str(exc),
-        )
-        return
-    except Exception as exc:
-        state.metrics.requests_total.labels(mode=metric_mode_label, verdict="error").inc()
-        yield _stream_error_event(
-            request_id=request_id,
-            code=ErrorCode.GENERATION_FAILED,
-            message=str(exc) or "stream_transform failed",
-        )
-        return
+    parent_attrs = {
+        GEN_AI_SYSTEM: GEN_AI_SYSTEM_TRANSDUCE,
+        GEN_AI_REQUEST_MODEL: state.backend.model,
+        TRANSDUCE_MODE_ID: spec.id,
+        TRANSDUCE_LANGUAGE: language,
+    }
+    with state.span_emitter.span(SPAN_REQUEST, parent_attrs) as request_span:
+        try:
+            async for event in stream_transform(
+                text=data.text,
+                spec=spec,
+                backend=state.backend,
+                verifier=state.verifier,
+                intensity=data.intensity,
+                preserve=_coerce_preserve(data.preserve),
+                span_emitter=state.span_emitter,
+            ):
+                if isinstance(event, StreamChunkEvent):
+                    yield ServerSentEventMessage(
+                        data=json.dumps({"text": event.text}),
+                        event="chunk",
+                    )
+                elif isinstance(event, StreamVerdictEvent):
+                    payload = {
+                        "request_id": request_id,
+                        "mode": event.mode.model_dump(mode="json"),
+                        "language": language,
+                        "verdict": event.verdict,
+                        "transformed": event.transformed,
+                        "rejection_reason": event.rejection_reason,
+                        "diff": list(event.diff),
+                        "scores": event.scores,
+                        "tokens_in": event.tokens_in,
+                        "tokens_out": event.tokens_out,
+                        "timing_ms": event.timing_ms,
+                    }
+                    request_span.set_attribute(TRANSDUCE_VERDICT, event.verdict)
+                    yield ServerSentEventMessage(
+                        data=json.dumps(payload),
+                        event="verdict",
+                    )
+        except ConcurrencyLimitExceededError as exc:
+            state.metrics.concurrency_rejections_total.labels(backend=exc.backend_id).inc()
+            state.metrics.requests_total.labels(mode=metric_mode_label, verdict="error").inc()
+            yield _stream_error_event(
+                request_id=request_id,
+                code=ErrorCode.CONCURRENCY_LIMIT_EXCEEDED,
+                message=str(exc),
+            )
+            return
+        except Exception as exc:
+            state.metrics.requests_total.labels(mode=metric_mode_label, verdict="error").inc()
+            code = _classify_stream_exception(exc)
+            yield _stream_error_event(
+                request_id=request_id,
+                code=code,
+                message=str(exc) or code.value,
+            )
+            return
 
-    state.metrics.requests_total.labels(mode=metric_mode_label, verdict="accept").inc()
+        state.metrics.requests_total.labels(mode=metric_mode_label, verdict="accept").inc()
+
+
+def _classify_stream_exception(exc: BaseException) -> ErrorCode:
+    """Map a backend / orchestrator exception to its SSE error-event code."""
+    for exc_type, code in _STREAM_ERROR_CODES:
+        if isinstance(exc, exc_type):
+            return code
+    return ErrorCode.GENERATION_FAILED
 
 
 def _streaming_error_response(
