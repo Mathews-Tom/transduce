@@ -13,6 +13,7 @@ from collections import Counter
 import pytest
 
 from tests.eval.loader import (
+    load_composition_corpus,
     load_faithfulness_corpus,
     load_faithfulness_v0_2_corpus,
     load_injection_corpus,
@@ -134,3 +135,54 @@ def test_faithfulness_v0_2_balanced_accept_and_reject_per_language() -> None:
     for language, label_counts in by_language.items():
         assert label_counts["accept"] > 0, f"language {language!r} has no accept records"
         assert label_counts["reject"] > 0, f"language {language!r} has no reject records"
+
+
+# ---------------------------------------------------------------------------
+# transduce-composition v0.1 (compose-chain drift cases)
+# ---------------------------------------------------------------------------
+
+
+def test_composition_corpus_has_at_least_100_records() -> None:
+    records = load_composition_corpus()
+
+    assert len(records) >= 100
+
+
+def test_composition_corpus_covers_three_drift_categories() -> None:
+    records = load_composition_corpus()
+    categories = {record["category"] for record in records}
+
+    assert categories == {"faithful_chain", "drift_accumulated", "intensity_overshoot"}
+
+
+def test_composition_corpus_record_structure_has_two_stages() -> None:
+    records = load_composition_corpus()
+
+    for record in records:
+        assert isinstance(record["original"], str)
+        assert isinstance(record["stage_1"], str)
+        assert isinstance(record["stage_2"], str)
+        assert record["original"]
+        assert record["stage_1"]
+        assert record["stage_2"]
+
+
+def test_composition_corpus_faithful_chains_expect_accept() -> None:
+    records = load_composition_corpus()
+    faithful = [r for r in records if r["category"] == "faithful_chain"]
+
+    assert faithful, "no faithful_chain records present"
+    for record in faithful:
+        assert record["expected_composite_verdict"] == "accept", (
+            f"faithful_chain record expected accept, got {record['expected_composite_verdict']!r}"
+        )
+
+
+def test_composition_corpus_drift_categories_expect_reject() -> None:
+    records = load_composition_corpus()
+    drift = [r for r in records if r["category"] in {"drift_accumulated", "intensity_overshoot"}]
+
+    for record in drift:
+        assert record["expected_composite_verdict"] == "reject", (
+            f"{record['category']!r} record expected reject"
+        )
