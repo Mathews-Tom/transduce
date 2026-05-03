@@ -6,11 +6,13 @@ import importlib.metadata as importlib_metadata
 
 import click
 import uvicorn
+from opentelemetry import trace
 
 from transduce.api.app import create_app
 from transduce.backends.factory import build_backend
 from transduce.config.loader import ConfigError, load_config
 from transduce.config.schema import BackendEntry, Config
+from transduce.observability import build_tracer_provider
 from transduce.verification.cosine import CosineSimilarityScorer, build_fastembed_embedder
 from transduce.verification.preservation import (
     EntityPreservationScorer,
@@ -62,6 +64,16 @@ def serve(
         raise click.ClickException(str(exc)) from exc
 
     from transduce.verification.base import Scorer
+
+    if config.observability.debug_include_text:
+        click.echo(
+            "WARN: observability.debug_include_text=true — raw text will be "
+            "emitted in OTel spans. Disable in production.",
+            err=True,
+        )
+    provider = build_tracer_provider(config.observability)
+    if provider is not None:
+        trace.set_tracer_provider(provider)
 
     scorers: list[Scorer] = [
         CosineSimilarityScorer(

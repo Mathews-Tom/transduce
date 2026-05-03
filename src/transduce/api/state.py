@@ -10,6 +10,7 @@ from transduce.backends.base import Backend
 from transduce.config.schema import Config
 from transduce.injection.scanner import InjectionScanner
 from transduce.language.detector import LanguageDetector
+from transduce.observability import SpanEmitter
 from transduce.pipeline.orchestrator import Orchestrator
 from transduce.registry.static import StaticRegistry
 from transduce.verification.pipeline import VerifierPipeline
@@ -27,6 +28,7 @@ class TransduceState:
     metrics: TransduceMetrics
     injection_scanner: InjectionScanner
     language_detector: LanguageDetector
+    span_emitter: SpanEmitter
     backend_id: str
     backend_model_size_b: float | None
 
